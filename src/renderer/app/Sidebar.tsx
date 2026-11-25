@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { Building2, CalendarDays, CalendarRange, LayoutDashboard, Paperclip, Search, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cx } from '../lib/format'
+import { SpaceTree } from './SpaceTree'
 
 function Item({ to, icon, label, testId }: { to: string; icon: ReactNode; label: string; testId: string }) {
   return (
@@ -42,7 +43,9 @@ export function Sidebar() {
           <Item to="/companies" icon={<Building2 size={16} />} label="Empresas" testId="nav-companies" />
         </nav>
       </div>
-      <div className="mt-4 flex-1 overflow-y-auto px-2" id="space-tree-slot" />
+      <div className="mt-4 flex-1 overflow-y-auto px-2">
+        <SpaceTree />
+      </div>
       <div className="border-t border-zinc-200 p-2 dark:border-zinc-800">
         <Item to="/settings" icon={<Settings size={16} />} label="Configurações" testId="nav-settings" />
       </div>
