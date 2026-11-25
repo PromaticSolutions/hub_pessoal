@@ -1,0 +1,25 @@
+import { test, expect } from '@playwright/test'
+import { invoke, launchApp, makeTempDir } from '../helpers/app'
+
+test('Ctrl+K encontra comentário e abre a tarefa; página de busca filtra', async () => {
+  const { app, page } = await launchApp(makeTempDir('pth-search-'))
+  const p = await invoke(page, 'projects.create', { companyId: 1, folderId: null, name: 'Jurídico', color: '#000' })
+  const t = await invoke(page, 'tasks.quickCreate', { projectId: p.id, title: 'Revisar contrato', priority: 'high' })
+  await invoke(page, 'tasks.quickCreate', { projectId: p.id, title: 'Contrato antigo', priority: 'low' })
+  await invoke(page, 'comments.add', { taskId: t.id, body: 'assinatura pendente' })
+  await page.keyboard.press('Control+k')
+  await page.getByTestId('palette-input').fill('assin')
+  await expect(page.getByTestId(`palette-row-c1`)).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('task-modal')).toBeVisible()
+  await expect(page.getByTestId('task-title')).toHaveValue('Revisar contrato')
+  await page.getByTestId('task-modal-close').click()
+  await page.keyboard.press('Control+k')
+  await page.getByTestId('palette-input').fill('contrato')
+  await page.getByTestId('palette-row-all').click()
+  await expect(page.getByTestId('search-results')).toContainText('Revisar contrato')
+  await expect(page.getByTestId('search-results')).toContainText('Contrato antigo')
+  await page.getByTestId('filter-priority').selectOption('high')
+  await expect(page.getByTestId('search-results')).not.toContainText('Contrato antigo')
+  await app.close()
+})
