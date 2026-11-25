@@ -7,9 +7,9 @@
     "strict": true,
     "skipLibCheck": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "baseUrl": ".",
-    "paths": { "@shared/*": ["src/shared/*"], "@renderer/*": ["src/renderer/*"] },
+    "paths": { "@shared/*": ["src/shared/*"], "@renderer/*": ["src/renderer/*"], "@main/*": ["src/main/*"] },
     "noEmit": true
   },
   "include": ["src/renderer/**/*", "src/shared/**/*"]
