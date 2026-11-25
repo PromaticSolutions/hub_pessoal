@@ -1,0 +1,40 @@
+import type { ColumnCategory, Priority, ProjectStatus } from './types'
+
+export const DEFAULT_COLUMNS: { name: string; category: ColumnCategory }[] = [
+  { name: 'Backlog', category: 'todo' },
+  { name: 'A fazer', category: 'todo' },
+  { name: 'Em andamento', category: 'in_progress' },
+  { name: 'Em revisão', category: 'in_progress' },
+  { name: 'Concluído', category: 'done' }
+]
+
+export const PRIORITIES: Priority[] = ['urgent', 'high', 'medium', 'low']
+export const PRIORITY_LABELS: Record<Priority, string> = { low: 'Baixa', medium: 'Média', high: 'Alta', urgent: 'Urgente' }
+export const PRIORITY_ORDER: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 }
+export const PRIORITY_COLORS: Record<Priority, string> = { urgent: '#dc2626', high: '#ea580c', medium: '#2563eb', low: '#6b7280' }
+
+export const CATEGORIES: ColumnCategory[] = ['todo', 'in_progress', 'done']
+export const CATEGORY_LABELS: Record<ColumnCategory, string> = { todo: 'A fazer', in_progress: 'Em andamento', done: 'Concluído' }
+
+export const PROJECT_STATUSES: ProjectStatus[] = ['planned', 'active', 'paused', 'completed']
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  planned: 'Planejado',
+  active: 'Ativo',
+  paused: 'Pausado',
+  completed: 'Concluído'
+}
+
+export const SPACE_COLORS = [
+  '#6366F1', '#0EA5E9', '#10B981', '#84CC16', '#F59E0B',
+  '#F97316', '#EF4444', '#EC4899', '#8B5CF6', '#64748B'
+]
+
+export const SETTINGS_DEFAULTS = {
+  theme: 'system' as 'system' | 'light' | 'dark',
+  nearDueDays: 7,
+  weekStartsOn: 1 as 0 | 1,
+  showStartMarkers: true
+}
+
+export const AUTO_BACKUP_KEEP = 14
+export const DELETED_ATTACHMENT_DAYS = 30
