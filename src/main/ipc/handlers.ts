@@ -5,10 +5,16 @@ import { getAllSettings, getSetting, setSetting } from '../services/settings'
 import * as sys from './system'
 
 import * as companies from '../services/companies'
+import * as folders from '../services/folders'
+import * as projects from '../services/projects'
+import * as boards from '../services/boards'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
 const nullableStr = z.string().nullable().optional()
+const projectStatus = z.enum(['planned', 'active', 'paused', 'completed'])
+const priority = z.enum(['low', 'medium', 'high', 'urgent'])
+const category = z.enum(['todo', 'in_progress', 'done'])
 const between = { beforeId: zid.nullable(), afterId: zid.nullable() }
 
 export const handlers = {
@@ -34,10 +40,42 @@ export const handlers = {
   'companies.delete': h(ID, (c, i) => companies.deleteCompany(c, i.id)),
   'companies.reorder': h(z.object({ id: zid, ...between }), (c, { id, ...w }) => companies.reorderCompany(c, id, w)),
   'companies.logoDataUrl': h(ID, (c, i) => companies.getCompanyLogoDataUrl(c, i.id)),
+  // spaces / folders
+  'spaces.tree': h(z.object({ includeArchived: z.boolean().optional() }), (c, i) => projects.getSpaceTree(c, i)),
+  'folders.create': h(z.object({ companyId: zid, parentId: zid.nullable(), name: z.string() }), (c, i) => folders.createFolder(c, i)),
+  'folders.update': h(z.object({ id: zid, name: z.string().optional(), color: z.string().nullable().optional() }), (c, { id, ...p }) => folders.updateFolder(c, id, p)),
+  'folders.move': h(z.object({ id: zid, companyId: zid, parentId: zid.nullable(), ...between }), (c, i) => folders.moveFolder(c, i)),
+  'folders.archive': h(ID, (c, i) => folders.archiveFolder(c, i.id)),
+  'folders.restore': h(ID, (c, i) => folders.restoreFolder(c, i.id)),
+  'folders.delete': h(ID, (c, i) => folders.deleteFolder(c, i.id)),
+  // projects
+  'projects.get': h(ID, (c, i) => projects.getProject(c, i.id)),
+  'projects.create': h(
+    z.object({ companyId: zid, folderId: zid.nullable(), name: z.string(), description: z.string().optional(), color: z.string(), startDate: nullableStr, dueDate: nullableStr, status: projectStatus.optional() }),
+    (c, i) => projects.createProject(c, i)
+  ),
+  'projects.update': h(
+    z.object({ id: zid, name: z.string().optional(), description: z.string().optional(), color: z.string().optional(), startDate: nullableStr, dueDate: nullableStr, status: projectStatus.optional() }),
+    (c, { id, ...p }) => projects.updateProject(c, id, p)
+  ),
+  'projects.move': h(z.object({ id: zid, companyId: zid, folderId: zid.nullable(), ...between }), (c, i) => projects.moveProject(c, i)),
+  'projects.archive': h(ID, (c, i) => projects.archiveProject(c, i.id)),
+  'projects.restore': h(ID, (c, i) => projects.restoreProject(c, i.id)),
+  'projects.deletionImpact': h(ID, (c, i) => projects.getProjectDeletionImpact(c, i.id)),
+  'projects.delete': h(ID, (c, i) => projects.deleteProject(c, i.id)),
+  // boards
+  'boards.create': h(z.object({ projectId: zid, name: z.string() }), (c, i) => boards.createBoard(c, i)),
+  'boards.list': h(z.object({ projectId: zid, includeArchived: z.boolean().optional() }), (c, i) => boards.listBoards(c, i)),
+  'boards.update': h(z.object({ id: zid, name: z.string() }), (c, { id, ...p }) => boards.updateBoard(c, id, p)),
+  'boards.reorder': h(z.object({ id: zid, ...between }), (c, { id, ...w }) => boards.reorderBoard(c, id, w)),
+  'boards.archive': h(ID, (c, i) => boards.archiveBoard(c, i.id)),
+  'boards.restore': h(ID, (c, i) => boards.restoreBoard(c, i.id)),
+  'boards.delete': h(ID, (c, i) => boards.deleteBoard(c, i.id)),
   // @@end
 } satisfies Record<string, Handler>
 
-void nullableStr
+void priority
+void category
 
 type Handlers = typeof handlers
 export type ApiMethods = {
