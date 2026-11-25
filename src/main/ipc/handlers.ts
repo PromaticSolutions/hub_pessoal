@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { Handler } from './registry'
 import { h } from './registry'
+import { AppError } from '../lib/errors'
 import { getAllSettings, getSetting, setSetting } from '../services/settings'
 import * as sys from './system'
 
@@ -13,6 +14,7 @@ import * as tasks from '../services/tasks'
 import * as labels from '../services/labels'
 import * as comments from '../services/comments'
 import * as checklists from '../services/checklists'
+import * as attachments from '../services/attachments'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
@@ -117,6 +119,19 @@ export const handlers = {
   'checklistItems.update': h(z.object({ id: zid, text: z.string().optional(), done: z.boolean().optional() }), (c, { id, ...p }) => checklists.updateChecklistItem(c, id, p)),
   'checklistItems.move': h(z.object({ id: zid, checklistId: zid, ...between }), (c, i) => checklists.moveChecklistItem(c, i)),
   'checklistItems.delete': h(ID, (c, i) => checklists.deleteChecklistItem(c, i.id)),
+  // attachments
+  'attachments.add': h(z.object({ taskId: zid.optional(), projectId: zid.optional(), sourcePaths: z.array(z.string()).min(1) }), (c, i) => attachments.addAttachments(c, i)),
+  'attachments.list': h(
+    z.object({ companyId: zid.optional(), projectId: zid.optional(), taskId: zid.optional(), kind: z.enum(['image', 'pdf', 'document', 'other']).optional(), text: z.string().optional(), includeArchived: z.boolean().optional() }),
+    (c, i) => attachments.listAttachments(c, i)
+  ),
+  'attachments.open': h(ID, async (c, i) => {
+    const err = await sys.openPath(attachments.getAttachmentAbsPath(c, i.id))
+    if (err) throw new AppError('INTERNAL', err)
+  }),
+  'attachments.reveal': h(ID, (c, i) => sys.revealPath(attachments.getAttachmentAbsPath(c, i.id))),
+  'attachments.delete': h(ID, (c, i) => attachments.deleteAttachment(c, i.id)),
+  'attachments.thumbnail': h(ID, (c, i) => attachments.getAttachmentDataUrl(c, i.id)),
   // @@end
 } satisfies Record<string, Handler>
 

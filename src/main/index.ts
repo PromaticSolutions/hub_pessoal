@@ -8,6 +8,7 @@ import { runMigrations } from './db/migrate'
 import { fileStamp } from './db/sqlutil'
 import { closeDatabase, listAutoBackups, purgeDeletedAttachments, quickCheck, runDailyAutoBackup } from './services/maintenance'
 import type { AppContext } from './context'
+import { restoreMissingAttachments } from './services/attachments'
 import { dispatch, logError } from './ipc/registry'
 import { handlers } from './ipc/handlers'
 import { setMainHooks } from './mainHooks'
@@ -104,6 +105,7 @@ function boot(): void {
   ctx = { db, paths, now: () => new Date() }
   try {
     runDailyAutoBackup(db, paths, new Date())
+    restoreMissingAttachments(paths, db)
     purgeDeletedAttachments(paths, new Date())
   } catch (err) {
     logError(ctx, 'startup-maintenance', err)
