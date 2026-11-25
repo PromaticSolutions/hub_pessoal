@@ -10,8 +10,8 @@ export function positionBetween(before: number | null, after: number | null): nu
 }
 
 export function needsRenormalize(before: number | null, after: number | null): boolean {
-  if (before == null || after == null) return false
-  return after - before < 1e-6
+  if (after == null) return false
+  return after - (before ?? 0) < 1e-6
 }
 
 export type PositionedTable =

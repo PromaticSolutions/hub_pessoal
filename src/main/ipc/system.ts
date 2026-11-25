@@ -38,3 +38,7 @@ export function documentsDir(): string {
 export function appVersion(): string {
   return app.getVersion()
 }
+
+export async function openExternal(url: string): Promise<void> {
+  await shell.openExternal(url)
+}

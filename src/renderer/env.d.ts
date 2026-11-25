@@ -5,6 +5,7 @@ declare global {
     api: {
       invoke(method: string, input: unknown): Promise<Envelope>
       getPathForFile(file: File): string
+      onFlushRequest(cb: () => Promise<void>): void
     }
   }
 }

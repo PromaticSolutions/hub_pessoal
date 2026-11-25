@@ -1,10 +1,11 @@
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { AUTO_BACKUP_KEEP, DELETED_ATTACHMENT_DAYS } from '@shared/constants'
 import { toLocalDate } from '@shared/dates'
 import type { DataPaths } from '../paths'
-import { vacuumInto } from '../db/sqlutil'
+import { fileStamp, vacuumInto } from '../db/sqlutil'
+import { openDatabase } from '../db/connection'
 
 export function quickCheck(db: Database.Database): boolean {
   try {
@@ -56,4 +57,30 @@ export function closeDatabase(db: Database.Database): void {
   } finally {
     db.close()
   }
+}
+
+/**
+ * Corruption recovery: moves the current DB files to backups/pre-restore/corrupted-<stamp>/ and
+ * restores the newest automatic backup that passes quick_check. Returns the open DB, or null.
+ */
+export function recoverFromAutoBackups(paths: DataPaths): Database.Database | null {
+  const aside = join(paths.backupsPreRestore, `corrupted-${fileStamp()}`)
+  mkdirSync(aside, { recursive: true })
+  for (const suffix of ['', '-wal', '-shm']) {
+    const f = paths.dbFile + suffix
+    if (existsSync(f)) renameSync(f, join(aside, `hub.db${suffix}`))
+  }
+  for (const b of listAutoBackups(paths)) {
+    let db: Database.Database | null = null
+    try {
+      copyFileSync(b.file, paths.dbFile)
+      db = openDatabase(paths.dbFile)
+      if (quickCheck(db)) return db
+    } catch {
+      /* try the next one */
+    }
+    try { db?.close() } catch { /* ignore */ }
+    for (const suffix of ['', '-wal', '-shm']) rmSync(paths.dbFile + suffix, { force: true })
+  }
+  return null
 }

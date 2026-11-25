@@ -12,6 +12,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { cx, formatBytes, formatDate } from '../../lib/format'
 import { useToast } from '../../components/toast'
 import { MoveTaskDialog } from './MoveTaskDialog'
+import { flushAll, registerFlusher, track } from '../../lib/flush'
 
 /* ---------- host: opens when ?task=<id> ---------- */
 
@@ -348,13 +349,15 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
     if (p.title !== undefined && !p.title.trim()) delete p.title
     if (!Object.keys(p).length) return
     try {
-      await api('tasks.update', { id: taskId, ...p })
+      await track(api('tasks.update', { id: taskId, ...p }))
       setSaved(true)
       setTimeout(() => setSaved(false), 1500)
     } catch (e) {
       toast.error((e as Error).message)
     }
   }, [taskId, toast])
+
+  useEffect(() => registerFlusher(flush), [flush])
 
   const queue = (patch: { title?: string; description?: string }) => {
     pending.current = { ...pending.current, ...patch }
@@ -363,7 +366,7 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
   }
 
   const close = async () => {
-    await flush()
+    await flushAll()
     await qc.invalidateQueries()
     onClose()
   }
@@ -418,7 +421,27 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
             >
               {preview ? (
                 <div className="prose-sm min-h-10 cursor-text rounded-md p-1 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/40 [&_a]:text-indigo-600 [&_a]:underline [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc [&_h1]:text-lg [&_h1]:font-bold [&_h2]:font-semibold [&_code]:rounded [&_code]:bg-zinc-100 [&_code]:px-1 dark:[&_code]:bg-zinc-800" onClick={() => setPreview(false)}>
-                  {desc ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{desc}</ReactMarkdown> : <span className="text-zinc-400">Clique para adicionar uma descrição (Markdown).</span>}
+                  {desc ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        a: ({ href, children }) => (
+                          <a
+                            href={href}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              if (href) api('system.openExternal', { url: href }).catch((err) => toast.error(err.message))
+                            }}
+                          >
+                            {children}
+                          </a>
+                        )
+                      }}
+                    >
+                      {desc}
+                    </ReactMarkdown>
+                  ) : <span className="text-zinc-400">Clique para adicionar uma descrição (Markdown).</span>}
                 </div>
               ) : (
                 <Textarea data-testid="task-description" rows={8} autoFocus value={desc} onChange={(e) => { setDesc(e.target.value); queue({ description: e.target.value }) }} onBlur={flush} placeholder="Descrição detalhada (suporta Markdown)" />

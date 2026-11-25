@@ -135,18 +135,30 @@ export function applyRestore(paths: DataPaths, stagingDir: string, now: Date): s
   const full = existsSync(join(stagingDir, 'manifest.json'))
   const aside = join(paths.backupsPreRestore, `${fileStamp(now)}-${basename(stagingDir)}`)
   mkdirSync(aside, { recursive: true })
-  for (const s of ['', '-wal', '-shm']) {
-    const f = paths.dbFile + s
-    if (existsSync(f)) renameSync(f, join(aside, `hub.db${s}`))
+  const undo: [string, string][] = [] // [from, to] renames to reverse on failure
+  const mv = (from: string, to: string) => {
+    renameSync(from, to)
+    undo.push([from, to])
   }
-  renameSync(join(stagingDir, 'hub.db'), paths.dbFile)
-  if (full) {
-    for (const [dir, name] of [[paths.attachments, 'attachments'], [paths.logos, 'logos']] as const) {
-      if (existsSync(dir)) renameSync(dir, join(aside, name))
-      const staged = join(stagingDir, name)
-      if (existsSync(staged)) renameSync(staged, dir)
-      else mkdirSync(dir, { recursive: true })
+  try {
+    for (const s of ['', '-wal', '-shm']) {
+      const f = paths.dbFile + s
+      if (existsSync(f)) mv(f, join(aside, `hub.db${s}`))
     }
+    mv(join(stagingDir, 'hub.db'), paths.dbFile)
+    if (full) {
+      for (const [dir, name] of [[paths.attachments, 'attachments'], [paths.logos, 'logos']] as const) {
+        if (existsSync(dir)) mv(dir, join(aside, name))
+        const staged = join(stagingDir, name)
+        if (existsSync(staged)) mv(staged, dir)
+        else mkdirSync(dir, { recursive: true })
+      }
+    }
+  } catch (e) {
+    for (const [from, to] of undo.reverse()) {
+      try { renameSync(to, from) } catch { /* best effort: originals remain in backups/pre-restore */ }
+    }
+    throw new AppError('INTERNAL', `Falha ao restaurar; os dados atuais foram mantidos. (${(e as Error).message})`)
   }
   rmSync(stagingDir, { recursive: true, force: true })
   return aside

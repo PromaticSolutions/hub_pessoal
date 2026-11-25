@@ -206,6 +206,10 @@ export const handlers = {
     return { dataPath: c.paths.root, dbBytes: size(c.paths.dbFile) + size(`${c.paths.dbFile}-wal`), attachmentsBytes: row.s, attachmentCount: row.n }
   }),
   'system.appInfo': h(z.object({}), () => ({ version: sys.appVersion(), schemaVersion: LATEST_SCHEMA_VERSION, electron: process.versions.electron })),
+  'system.openExternal': h(z.object({ url: z.string() }), async (_c, i) => {
+    if (!/^(https?:\/\/|mailto:)/i.test(i.url)) throw new AppError('VALIDATION', 'Só links http(s) e mailto podem ser abertos.')
+    await sys.openExternal(i.url)
+  }),
   // @@end
 } satisfies Record<string, Handler>
 

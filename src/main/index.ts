@@ -1,12 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
-import { copyFileSync, existsSync, mkdirSync, renameSync } from 'node:fs'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { ensureDataDirs, getDataRoot, resolveDataPaths, type DataPaths } from './paths'
 import { openDatabase } from './db/connection'
 import { runMigrations } from './db/migrate'
-import { fileStamp } from './db/sqlutil'
-import { closeDatabase, listAutoBackups, purgeDeletedAttachments, quickCheck, runDailyAutoBackup } from './services/maintenance'
+import { closeDatabase, listAutoBackups, purgeDeletedAttachments, quickCheck, recoverFromAutoBackups, runDailyAutoBackup } from './services/maintenance'
 import type { AppContext } from './context'
 import { restoreMissingAttachments } from './services/attachments'
 import { applyRestore } from './services/backup'
@@ -16,6 +15,10 @@ import { setMainHooks } from './mainHooks'
 
 let mainWindow: BrowserWindow | null = null
 let ctx: AppContext | null = null
+
+function appUrl(): string {
+  return process.env.ELECTRON_RENDERER_URL ?? pathToFileURL(join(__dirname, '../renderer/index.html')).href
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -33,20 +36,29 @@ function createWindow(): BrowserWindow {
     }
   })
   win.once('ready-to-show', () => win.show())
+  // Never leave the app page: block navigations and new windows (http(s) links open in the browser).
+  win.webContents.on('will-navigate', (e, url) => {
+    if (url.split('#')[0] !== appUrl()) e.preventDefault()
+  })
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  // Ask the renderer to save pending edits before the window goes away.
+  let flushed = false
+  win.on('close', (e) => {
+    if (flushed || win.webContents.isDestroyed()) return
+    e.preventDefault()
+    flushed = true
+    const done = () => { clearTimeout(timer); if (!win.isDestroyed()) win.close() }
+    const timer = setTimeout(done, 3000)
+    ipcMain.once('app:flushed', done)
+    win.webContents.send('app:flush')
+  })
   win.on('page-title-updated', (e) => e.preventDefault())
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else win.loadFile(join(__dirname, '../renderer/index.html'))
   return win
-}
-
-function moveDbFilesAside(paths: DataPaths, label: string): string {
-  const dest = join(paths.backupsPreRestore, `${label}-${fileStamp()}`)
-  mkdirSync(dest, { recursive: true })
-  for (const suffix of ['', '-wal', '-shm']) {
-    const f = paths.dbFile + suffix
-    if (existsSync(f)) renameSync(f, join(dest, `hub.db${suffix}`))
-  }
-  return dest
 }
 
 /** Opens the database, recovering from corruption if the user agrees. Returns null to quit. */
@@ -69,17 +81,16 @@ function openCheckedDatabase(paths: DataPaths): Database.Database | null {
     title: 'Personal Task Hub',
     message: 'O banco de dados parece danificado.',
     detail: backups.length
-      ? `Posso restaurar o backup automático mais recente (${backups[0].date}). O arquivo atual será guardado em backups/pre-restore.`
+      ? `Posso restaurar o backup automático íntegro mais recente (a partir de ${backups[0].date}). O arquivo atual será guardado em backups/pre-restore.`
       : 'Não há backups automáticos disponíveis. O arquivo atual não será alterado.',
     buttons: backups.length ? ['Restaurar último backup automático', 'Sair'] : ['Sair'],
     defaultId: 0,
     cancelId: backups.length ? 1 : 0
   })
   if (!backups.length || choice !== 0) return null
-  moveDbFilesAside(paths, 'corrupted')
-  copyFileSync(backups[0].file, paths.dbFile)
-  const restored = openDatabase(paths.dbFile)
-  return quickCheck(restored) ? restored : null
+  const restored = recoverFromAutoBackups(paths)
+  if (!restored) dialog.showMessageBoxSync({ type: 'error', title: 'Personal Task Hub', message: 'Nenhum backup automático íntegro foi encontrado.', detail: 'O arquivo danificado foi guardado em backups/pre-restore. Use Configurações → Restaurar backup com um backup completo.' })
+  return restored
 }
 
 function boot(): void {
@@ -112,7 +123,11 @@ function boot(): void {
     logError(ctx, 'startup-maintenance', err)
   }
   const c = ctx
-  ipcMain.handle('api', (_e, method: string, input: unknown) => dispatch(handlers, c, method, input))
+  ipcMain.handle('api', (e, method: string, input: unknown) => {
+    const from = e.senderFrame?.url?.split('#')[0] ?? ''
+    if (!from.startsWith(appUrl())) return { ok: false, error: { code: 'FORBIDDEN', message: 'Origem não autorizada.' } }
+    return dispatch(handlers, c, method, input)
+  })
   setMainHooks({
     getWindow: () => mainWindow,
     getContext: () => ctx,

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import { api, type In, type Method, type Out } from './api'
 import { useToast } from '../components/toast'
+import { track } from './flush'
 
 export function useApiQuery<K extends Method>(method: K, input: In<K>, opts?: { enabled?: boolean }) {
   return useQuery({ queryKey: [method, input], queryFn: () => api(method, input), enabled: opts?.enabled ?? true })
@@ -26,16 +27,19 @@ export function useCall() {
   const qc = useQueryClient()
   const toast = useToast()
   return useCallback(
-    async <K extends Method>(method: K, input: In<K>): Promise<Out<K>> => {
-      try {
-        const r = await api(method, input)
-        await qc.invalidateQueries()
-        return r
-      } catch (e) {
-        toast.error((e as Error).message)
-        throw e
-      }
-    },
+    <K extends Method>(method: K, input: In<K>): Promise<Out<K>> =>
+      track(
+        (async () => {
+          try {
+            const r = await api(method, input)
+            await qc.invalidateQueries()
+            return r
+          } catch (e) {
+            toast.error((e as Error).message)
+            throw e
+          }
+        })()
+      ),
     [qc, toast]
   )
 }
