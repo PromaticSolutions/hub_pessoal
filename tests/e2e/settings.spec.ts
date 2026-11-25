@@ -1,0 +1,33 @@
+import { test, expect } from '@playwright/test'
+import { invoke, launchApp, makeTempDir } from '../helpers/app'
+
+test('configurações: vencimento próximo, etiquetas, dados e backups automáticos', async () => {
+  const dir = makeTempDir('pth-settings-')
+  const { app, page } = await launchApp(dir)
+  const p = await invoke(page, 'projects.create', { companyId: 1, folderId: null, name: 'P', color: '#000' })
+  const d = new Date(Date.now() + 5 * 86400000)
+  const due = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  await invoke(page, 'tasks.quickCreate', { projectId: p.id, title: 'Em 5 dias', dueAt: due })
+  await page.getByTestId('nav-week').click()
+  await page.getByTestId('nav-dashboard').click()
+  await expect(page.getByTestId('kpi-nearDue')).toHaveText('1')
+  await page.getByTestId('nav-settings').click()
+  await page.getByTestId('near-due-days').fill('3')
+  await expect.poll(() => invoke(page, 'settings.get', { key: 'nearDueDays' })).toBe(3)
+  await page.getByTestId('nav-dashboard').click()
+  await expect(page.getByTestId('kpi-nearDue')).toHaveText('0')
+  await page.getByTestId('nav-settings').click()
+  await page.getByTestId('settings-new-label').fill('Urgente cliente')
+  await page.keyboard.press('Enter')
+  const [label] = await invoke(page, 'labels.list', {})
+  await expect(page.getByTestId(`label-name-${label.id}`)).toHaveValue('Urgente cliente')
+  await page.getByTestId(`label-name-${label.id}`).fill('Cliente VIP')
+  await page.getByTestId(`label-name-${label.id}`).blur()
+  await expect.poll(async () => (await invoke(page, 'labels.list', {}))[0].name).toBe('Cliente VIP')
+  await page.getByTestId(`label-delete-${label.id}`).click()
+  await page.getByTestId('confirm-ok').click()
+  await expect.poll(async () => (await invoke(page, 'labels.list', {})).length).toBe(0)
+  await expect(page.getByTestId('data-path')).toHaveText(dir)
+  await expect(page.getByTestId('auto-backups').locator('li')).toHaveCount(1)
+  await app.close()
+})
