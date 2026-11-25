@@ -3,5 +3,91 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ---- Design tokens: floating surfaces, layered shadows, small radii (4–6px) ---- */
+:root {
+  --page: #f3f4f6;
+  --surface: #ffffff;
+  --lane: #e9ebef;
+  --line: rgba(16, 24, 40, 0.08);
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 14px rgba(16, 24, 40, 0.06);
+  --shadow-2: 0 2px 4px rgba(16, 24, 40, 0.06), 0 14px 30px rgba(16, 24, 40, 0.12);
+  --shadow-3: 0 4px 8px rgba(16, 24, 40, 0.08), 0 24px 56px rgba(16, 24, 40, 0.18);
+}
+.dark {
+  --page: #0c0c0f;
+  --surface: #17171b;
+  --lane: #121215;
+  --line: rgba(255, 255, 255, 0.07);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45), 0 4px 14px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.5), 0 14px 30px rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.55), 0 24px 56px rgba(0, 0, 0, 0.6);
+}
+
 html, body, #root { height: 100%; }
-body { font-family: 'Inter Variable', system-ui, sans-serif; font-size: 14px; }
+body {
+  font-family: 'Inter Variable', system-ui, sans-serif;
+  font-size: 14px;
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  /* floating panel */
+  .surface {
+    background: var(--surface);
+    border-radius: 6px;
+    box-shadow: var(--shadow-1);
+  }
+  /* overlay panel (modals, menus, palette) */
+  .surface-overlay {
+    background: var(--surface);
+    border-radius: 6px;
+    box-shadow: var(--shadow-3);
+  }
+  /* hover lift */
+  .lift {
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-2);
+  }
+  /* kanban / week lanes */
+  .lane {
+    background: var(--lane);
+    border-radius: 6px;
+  }
+  /* task card */
+  .card {
+    background: var(--surface);
+    border-radius: 5px;
+    box-shadow: var(--shadow-1);
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
+  }
+  .card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-2);
+  }
+  /* no hover motion while something is being dragged (keeps drop targets still) */
+  .is-dragging .card,
+  .is-dragging .lift {
+    transition: none;
+  }
+  .is-dragging .card:hover,
+  .is-dragging .lift:hover {
+    transform: none;
+  }
+  .card-dragging {
+    transform: rotate(1.5deg) scale(1.02);
+    box-shadow: var(--shadow-3);
+  }
+  .backdrop {
+    background: rgba(15, 17, 23, 0.32);
+    backdrop-filter: blur(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lift, .card { transition: none; }
+  .lift:hover, .card:hover { transform: none; }
+}

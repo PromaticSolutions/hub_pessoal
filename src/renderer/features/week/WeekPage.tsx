@@ -16,7 +16,7 @@ function WeekItem({ t }: { t: TaskListItem }) {
   const call = useCall()
   const open = useOpenTask()
   return (
-    <div data-testid={`week-item-${t.id}`} className="rounded-md border border-zinc-200 bg-white p-2 text-sm dark:border-zinc-700 dark:bg-zinc-800" style={{ borderLeft: `3px solid ${t.companyColor}` }}>
+    <div data-testid={`week-item-${t.id}`} className="card p-2 text-sm">
       <div className="flex items-start gap-2">
         <input
           key={`${t.id}-${t.status}`}
@@ -77,7 +77,7 @@ export default function WeekPage() {
       <div className="px-6 py-2"><TaskFilters value={filter} onChange={setFilter} /></div>
       <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto px-6 pb-4">
         {columns.map((c) => (
-          <div key={c.key} data-testid={`week-col-${c.key}`} className={cx('flex w-52 shrink-0 flex-col rounded-lg bg-zinc-100 dark:bg-zinc-900', c.highlight && 'ring-2 ring-indigo-500')}>
+          <div key={c.key} data-testid={`week-col-${c.key}`} className={cx('lane flex w-52 shrink-0 flex-col', c.highlight && 'ring-2 ring-indigo-500/70')}>
             <div className="px-2 py-2">
               <div className={cx('text-sm font-semibold capitalize', c.danger && 'text-red-600')}>{c.title} <span className="font-normal text-zinc-400">{c.items.length}</span></div>
               {c.sub && <div className="text-xs text-zinc-500">{c.sub}</div>}
@@ -87,7 +87,7 @@ export default function WeekPage() {
             </div>
           </div>
         ))}
-        <div className="flex w-52 shrink-0 flex-col rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700">
+        <div className="flex w-52 shrink-0 flex-col rounded-md border border-dashed border-zinc-300 dark:border-zinc-700">
           <div className="px-2 py-2 text-sm font-semibold text-zinc-500">Sem prazo <span className="font-normal">{noDue?.length ?? 0}</span></div>
           <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2">
             {noDue?.slice(0, 50).map((t) => <WeekItem key={t.id} t={t} />)}

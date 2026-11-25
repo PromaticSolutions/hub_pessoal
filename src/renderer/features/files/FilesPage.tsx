@@ -5,7 +5,7 @@ export default function FilesPage() {
   return (
     <div className="flex-1 overflow-y-auto">
       <PageHeader title="Arquivos" />
-      <div className="p-6"><FilesTable /></div>
+      <div className="px-6 pb-6 pt-2"><div className="surface p-5"><FilesTable /></div></div>
     </div>
   )
 }

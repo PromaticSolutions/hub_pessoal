@@ -7,7 +7,7 @@ import { CommandPalette } from '../features/search/CommandPalette'
 export function Layout() {
   return (
     <DialogsProvider>
-      <div className="flex h-full bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <div className="flex h-full gap-3 bg-[var(--page)] p-3 text-zinc-900 dark:text-zinc-100">
         <Sidebar />
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Outlet />

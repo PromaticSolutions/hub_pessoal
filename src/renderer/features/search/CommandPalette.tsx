@@ -51,9 +51,9 @@ export function CommandPalette() {
   useEffect(() => setSel(0), [rows.length])
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 pt-24" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="w-full max-w-xl overflow-hidden rounded-lg bg-white shadow-2xl dark:bg-zinc-900" data-testid="command-palette">
-        <div className="flex items-center gap-2 border-b border-zinc-200 px-3 dark:border-zinc-800">
+    <div className="backdrop fixed inset-0 z-[60] flex items-start justify-center pt-24" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <div className="surface-overlay w-full max-w-xl overflow-hidden" data-testid="command-palette">
+        <div className="flex items-center gap-2 border-b border-[var(--line)] px-3">
           <Search size={16} className="text-zinc-400" />
           <input
             data-testid="palette-input"

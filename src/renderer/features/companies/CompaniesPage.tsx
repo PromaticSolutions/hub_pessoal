@@ -24,7 +24,7 @@ export default function CompaniesPage() {
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3 p-6">
           {list.map((c) => (
-            <div key={c.id} data-testid={`company-card-${c.id}`} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <div key={c.id} data-testid={`company-card-${c.id}`} className="surface lift p-4">
               <Link to={`/spaces/${c.id}`} className="flex items-center gap-3">
                 <CompanyLogo company={c} />
                 <div className="min-w-0">

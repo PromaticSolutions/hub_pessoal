@@ -96,7 +96,7 @@ export default function ProjectPage() {
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center gap-1 px-6 py-2">
             {boards.map((b) => (
-              <div key={b.id} className={cx('group flex items-center rounded-md text-sm', b.id === activeBoard?.id ? 'bg-zinc-200 font-medium dark:bg-zinc-800' : 'hover:bg-zinc-100 dark:hover:bg-zinc-900')}>
+              <div key={b.id} className={cx('group flex items-center rounded-md text-sm', b.id === activeBoard?.id ? 'surface font-semibold' : 'hover:bg-white/70 dark:hover:bg-zinc-900')}>
                 <button data-testid={`board-tab-${b.id}`} className={cx('px-3 py-1', b.archivedAt && 'italic text-zinc-400')} onClick={() => nav(`/projects/${projectId}/boards/${b.id}`)}>
                   {b.name}
                 </button>

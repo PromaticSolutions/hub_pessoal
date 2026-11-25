@@ -36,7 +36,7 @@ const toScope = (v: ScopeValue) =>
 
 function Kpi({ id, label, value, tone }: { id: string; label: string; value: number; tone?: 'danger' | 'warn' }) {
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="surface lift p-4">
       <div data-testid={`kpi-${id}`} className={cx('text-3xl font-semibold tabular-nums', tone === 'danger' && value > 0 && 'text-red-600', tone === 'warn' && value > 0 && 'text-amber-600')}>
         {value}
       </div>
@@ -48,7 +48,7 @@ function Kpi({ id, label, value, tone }: { id: string; label: string; value: num
 function TaskMiniList({ title, items, empty, testId }: { title: string; items: TaskListItem[]; empty: string; testId: string }) {
   const open = useOpenTask()
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800" data-testid={testId}>
+    <div className="surface lift p-4" data-testid={testId}>
       <h3 className="mb-2 text-sm font-semibold">{title}</h3>
       {!items.length ? (
         <div className="text-xs text-zinc-500">{empty}</div>
@@ -73,7 +73,7 @@ function TaskMiniList({ title, items, empty, testId }: { title: string; items: T
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="surface lift p-4">
       <h3 className="mb-3 text-sm font-semibold">{title}</h3>
       {children}
     </div>
@@ -120,7 +120,7 @@ export default function DashboardPage() {
           </optgroup>
         </Select>
       </PageHeader>
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 px-6 pb-6 pt-0">
         <div className="text-sm text-zinc-500">
           {greeting} — {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
         </div>

@@ -13,7 +13,14 @@ import {
 } from 'react'
 import { X } from 'lucide-react'
 import type { Priority } from '@shared/types'
-import { PRIORITY_COLORS, PRIORITY_LABELS, SPACE_COLORS } from '@shared/constants'
+import { PRIORITY_LABELS, SPACE_COLORS } from '@shared/constants'
+
+const PRIORITY_SOFT: Record<Priority, string> = {
+  urgent: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300',
+  high: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+  medium: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300',
+  low: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+}
 import { cx } from '../lib/format'
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost'; size?: 'sm' | 'md' }
@@ -24,12 +31,12 @@ export function Button({ variant = 'secondary', size = 'md', className, ...p }: 
       type="button"
       {...p}
       className={cx(
-        'inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex items-center justify-center gap-1.5 rounded-[5px] font-medium transition duration-150 disabled:cursor-not-allowed disabled:opacity-50',
         size === 'sm' ? 'h-7 px-2 text-xs' : 'h-8 px-3 text-sm',
-        variant === 'primary' && 'bg-indigo-600 text-white hover:bg-indigo-500',
-        variant === 'secondary' && 'border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700',
-        variant === 'danger' && 'bg-red-600 text-white hover:bg-red-500',
-        variant === 'ghost' && 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800',
+        variant === 'primary' && 'bg-indigo-600 text-white shadow-[0_1px_2px_rgba(79,70,229,.25),0_4px_10px_rgba(79,70,229,.18)] hover:-translate-y-px hover:bg-indigo-500 hover:shadow-[0_2px_4px_rgba(79,70,229,.25),0_8px_18px_rgba(79,70,229,.25)]',
+        variant === 'secondary' && 'border border-zinc-200 bg-white text-zinc-800 shadow-[0_1px_2px_rgba(16,24,40,.05)] hover:bg-zinc-50 hover:shadow-[0_2px_6px_rgba(16,24,40,.08)] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700',
+        variant === 'danger' && 'bg-red-600 text-white shadow-[0_1px_2px_rgba(220,38,38,.25),0_4px_10px_rgba(220,38,38,.18)] hover:bg-red-500',
+        variant === 'ghost' && 'text-zinc-600 hover:bg-zinc-200/60 dark:text-zinc-300 dark:hover:bg-zinc-800',
         className
       )}
     />
@@ -41,7 +48,8 @@ export function Input({ className, ...p }: InputHTMLAttributes<HTMLInputElement>
     <input
       {...p}
       className={cx(
-        'h-8 w-full rounded-md border border-zinc-300 bg-white px-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900',
+        !/(^|\s)w-/.test(className ?? '') && 'w-full',
+        'h-8 rounded-[5px] border border-zinc-200 bg-white px-2 text-sm shadow-[0_1px_2px_rgba(16,24,40,.04)] outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-900',
         className
       )}
     />
@@ -53,7 +61,7 @@ export function Textarea({ className, ...p }: TextareaHTMLAttributes<HTMLTextAre
     <textarea
       {...p}
       className={cx(
-        'w-full rounded-md border border-zinc-300 bg-white p-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900',
+        'w-full rounded-[5px] border border-zinc-200 bg-white p-2 text-sm shadow-[0_1px_2px_rgba(16,24,40,.04)] outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-900',
         className
       )}
     />
@@ -65,7 +73,7 @@ export function Select({ className, ...p }: SelectHTMLAttributes<HTMLSelectEleme
     <select
       {...p}
       className={cx(
-        'h-8 rounded-md border border-zinc-300 bg-white px-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900',
+        'h-8 rounded-[5px] border border-zinc-200 bg-white px-2 text-sm shadow-[0_1px_2px_rgba(16,24,40,.04)] outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-900',
         className
       )}
     />
@@ -104,10 +112,10 @@ export function Modal({
   }, [open, onClose])
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-8" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div data-testid={testId} className={cx('w-full rounded-lg bg-white shadow-xl dark:bg-zinc-900', width)}>
+    <div className="backdrop fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-8" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div data-testid={testId} className={cx('surface-overlay w-full', width)}>
         {title !== undefined && (
-          <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
             <div className="font-semibold">{title}</div>
             <button className="rounded p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800" onClick={onClose} aria-label="Fechar">
               <X size={16} />
@@ -219,7 +227,7 @@ export function Menu({ trigger, items, align = 'right' }: { trigger: ReactNode; 
       {open && (
         <div
           className={cx(
-            'absolute z-40 mt-1 min-w-44 rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900',
+            'surface-overlay absolute z-40 mt-1 min-w-44 py-1',
             align === 'right' ? 'right-0' : 'left-0'
           )}
         >
@@ -230,7 +238,7 @@ export function Menu({ trigger, items, align = 'right' }: { trigger: ReactNode; 
               <button
                 key={i}
                 data-testid={it.testId}
-                className={cx('block w-full px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800', it.danger && 'text-red-600')}
+                className={cx('block w-full px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800', it.danger && 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40')}
                 onClick={(e) => {
                   e.stopPropagation()
                   setOpen(false)
@@ -268,12 +276,12 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (c: 
 }
 
 export function Dot({ color, size = 10 }: { color: string; size?: number }) {
-  return <span className="inline-block shrink-0 rounded-full" style={{ background: color, width: size, height: size }} />
+  return <span className="inline-block shrink-0 rounded-[2px]" style={{ background: color, width: size, height: size }} />
 }
 
 export function PriorityBadge({ priority }: { priority: Priority }) {
   return (
-    <span className="rounded px-1.5 py-0.5 text-[11px] font-medium text-white" style={{ background: PRIORITY_COLORS[priority] }}>
+    <span className={cx('rounded-[3px] px-1.5 py-0.5 text-[11px] font-semibold', PRIORITY_SOFT[priority])}>
       {PRIORITY_LABELS[priority]}
     </span>
   )
@@ -281,8 +289,8 @@ export function PriorityBadge({ priority }: { priority: Priority }) {
 
 export function PageHeader({ title, children, testId = 'page-title' }: { title: ReactNode; children?: ReactNode; testId?: string }) {
   return (
-    <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-      <h1 data-testid={testId} className="flex items-center gap-2 text-lg font-semibold">
+    <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 px-6 pb-2 pt-4">
+      <h1 data-testid={testId} className="flex items-center gap-2 text-xl font-bold tracking-tight">
         {title}
       </h1>
       <div className="flex flex-wrap items-center gap-2">{children}</div>

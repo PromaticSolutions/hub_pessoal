@@ -107,7 +107,7 @@ export function SpaceTree() {
       <span className="w-4" />
       <NavLink
         to={`/projects/${p.id}`}
-        className={({ isActive }) => cx('flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1', isActive ? 'bg-zinc-200 font-medium dark:bg-zinc-800' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/60')}
+        className={({ isActive }) => cx('flex min-w-0 flex-1 items-center gap-2 rounded-[5px] px-1.5 py-1 transition-colors', isActive ? 'bg-indigo-50 font-semibold text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/60')}
       >
         <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: p.color }} />
         <span className="truncate">{p.name}</span>
@@ -171,7 +171,7 @@ export function SpaceTree() {
           </button>
           <NavLink
             to={`/spaces/${c.id}`}
-            className={({ isActive }) => cx('flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1 font-medium', isActive ? 'bg-zinc-200 dark:bg-zinc-800' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/60')}
+            className={({ isActive }) => cx('flex min-w-0 flex-1 items-center gap-2 rounded-[5px] px-1.5 py-1 transition-colors font-medium', isActive ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/60')}
           >
             <Dot color={c.color} />
             <span className="truncate">{c.name}</span>

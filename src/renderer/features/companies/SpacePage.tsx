@@ -17,10 +17,9 @@ function ProjectCard({ p }: { p: Project }) {
     <Link
       to={`/projects/${p.id}`}
       data-testid={`project-card-${p.id}`}
-      className="block rounded-lg border border-zinc-200 p-3 hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
-      style={{ borderLeft: `4px solid ${p.color}` }}
+      className="surface lift block p-3.5"
     >
-      <div className="truncate font-medium">{p.name}</div>
+      <div className="flex items-center gap-2 truncate font-medium"><span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: p.color }} />{p.name}</div>
       <div className="mt-1 text-xs text-zinc-500">
         {PROJECT_STATUS_LABELS[p.status]}
         {p.dueDate && ` · prazo ${formatDate(p.dueDate)}`}
@@ -114,13 +113,13 @@ export default function SpacePage() {
         <div className="space-y-2 p-6 text-sm">
           {!archivedFolders.length && !archivedProjects.length && <EmptyState text="Nada arquivado." />}
           {archivedFolders.map((f) => (
-            <div key={`f${f.id}`} className="flex items-center justify-between rounded border border-zinc-200 px-3 py-2 dark:border-zinc-800">
+            <div key={`f${f.id}`} className="surface flex items-center justify-between px-3 py-2">
               <span>📁 {f.name}</span>
               <Button size="sm" onClick={() => call('folders.restore', { id: f.id })}>Restaurar</Button>
             </div>
           ))}
           {archivedProjects.map((p) => (
-            <div key={`p${p.id}`} className="flex items-center justify-between rounded border border-zinc-200 px-3 py-2 dark:border-zinc-800">
+            <div key={`p${p.id}`} className="surface flex items-center justify-between px-3 py-2">
               <Link to={`/projects/${p.id}`}>{p.name}</Link>
               <div className="flex gap-2">
                 <Button size="sm" data-testid={`restore-project-${p.id}`} onClick={() => call('projects.restore', { id: p.id })}>Restaurar</Button>

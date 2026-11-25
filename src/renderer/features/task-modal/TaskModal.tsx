@@ -106,7 +106,7 @@ function ChecklistSection({ taskId, checklists }: { taskId: number; checklists: 
         const done = cl.items.filter((i) => i.done).length
         const pct = cl.items.length ? Math.round((done / cl.items.length) * 100) : 0
         return (
-          <div key={cl.id} className="space-y-1.5 rounded-md border border-zinc-200 p-2 dark:border-zinc-800">
+          <div key={cl.id} className="space-y-1.5 rounded-[5px] bg-zinc-50 p-2.5 dark:bg-zinc-800/40">
             <div className="flex items-center gap-2">
               <input
                 className="flex-1 bg-transparent text-sm font-medium outline-none"
@@ -241,7 +241,7 @@ function ActivitySection({ taskId, comments }: { taskId: number; comments: { id:
             <div className="mt-1 flex justify-end"><Button size="sm" variant="primary" data-testid="comment-send" disabled={!body.trim()} onClick={send}>Comentar</Button></div>
           </div>
           {[...comments].reverse().map((c) => (
-            <div key={c.id} className="group rounded-md bg-zinc-50 p-2 text-sm dark:bg-zinc-800/50">
+            <div key={c.id} className="group rounded-[5px] bg-zinc-50 p-2.5 text-sm dark:bg-zinc-800/50">
               <div className="mb-1 flex items-center justify-between text-xs text-zinc-500">
                 <span>{formatDate(c.createdAt)}{c.updatedAt !== c.createdAt && ' (editado)'}</span>
                 <span className="invisible flex gap-2 group-hover:visible">
@@ -287,7 +287,7 @@ function LabelPicker({ taskId, selected }: { taskId: number; selected: number[] 
     <div className="relative">
       <Button size="sm" data-testid="labels-button" onClick={() => setOpen((o) => !o)}>Editar etiquetas</Button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-60 space-y-1 rounded-md border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="surface-overlay absolute right-0 z-20 mt-1 w-60 space-y-1 p-2">
           {labels?.map((l) => (
             <label key={l.id} className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={selected.includes(l.id)} onChange={() => toggle(l.id)} />
@@ -378,10 +378,10 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
     call('tasks.update', { id: taskId, ...patch }).then(() => { setSaved(true); setTimeout(() => setSaved(false), 1500) })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-6" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+    <div className="backdrop fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-6" onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <div
         data-testid="task-modal"
-        className={cx('relative w-full max-w-5xl rounded-lg bg-white shadow-xl dark:bg-zinc-900', dragOver && 'ring-4 ring-indigo-400')}
+        className={cx('surface-overlay relative w-full max-w-5xl', dragOver && 'ring-4 ring-indigo-400')}
         onKeyDown={(e) => e.key === 'Escape' && close()}
         onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragOver(true) } }}
         onDragLeave={() => setDragOver(false)}
@@ -394,7 +394,7 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
         }}
         tabIndex={-1}
       >
-        <div className="flex items-center gap-2 border-b border-zinc-200 px-5 py-3 text-xs text-zinc-500 dark:border-zinc-800">
+        <div className="flex items-center gap-2 border-b border-[var(--line)] px-5 py-3 text-xs text-zinc-500">
           <Dot color={t.company.color} />
           <Link to={`/spaces/${t.company.id}`} onClick={onClose} className="hover:underline">{t.company.name}</Link>›
           <Link to={`/projects/${t.project.id}`} onClick={onClose} className="hover:underline">{t.project.name}</Link>›
@@ -451,7 +451,7 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
             <AttachmentsSection taskId={taskId} attachments={t.attachments} />
             <ActivitySection taskId={taskId} comments={t.comments} />
           </div>
-          <aside className="space-y-3">
+          <aside className="space-y-3 rounded-[5px] bg-zinc-50 p-3 dark:bg-zinc-800/40">
             <Field label="Status">
               <Select data-testid="task-status" className="w-full" value={t.status} onChange={(e) => call('tasks.setStatus', { id: taskId, status: e.target.value as ColumnCategory })}>
                 {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
@@ -495,7 +495,7 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
                 <Button className="w-full justify-start" data-testid="task-archive" onClick={() => call('tasks.archive', { id: taskId })}><Archive size={14} /> Arquivar</Button>
               )}
               <Button
-                className="w-full justify-start text-red-600"
+                className="w-full justify-start !text-red-600 hover:!bg-red-50 dark:hover:!bg-red-950/40"
                 data-testid="task-delete"
                 onClick={async () => {
                   if (await confirm({ title: 'Excluir cartão permanentemente?', description: `"${t.title}" e todos os seus comentários, checklists e anexos serão apagados.`, danger: true, confirmLabel: 'Excluir' })) {

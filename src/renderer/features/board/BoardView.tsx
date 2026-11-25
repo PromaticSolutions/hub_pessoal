@@ -39,8 +39,8 @@ export function TaskCardFace({ card, dragging }: { card: CardSummary; dragging?:
   return (
     <div
       className={cx(
-        'rounded-md border border-zinc-200 bg-white p-2 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-800',
-        dragging && 'rotate-1 shadow-lg',
+        'card p-2.5 text-sm',
+        dragging && 'card-dragging',
         card.archivedAt && 'opacity-60',
         card.status === 'done' && 'text-zinc-500'
       )}
@@ -48,7 +48,7 @@ export function TaskCardFace({ card, dragging }: { card: CardSummary; dragging?:
       {card.labels.length > 0 && (
         <div className="mb-1 flex flex-wrap gap-1">
           {card.labels.map((l) => (
-            <span key={l.id} className="rounded px-1.5 text-[10px] font-medium text-white" style={{ background: l.color }}>
+            <span key={l.id} className="rounded-[3px] px-1.5 py-px text-[10px] font-semibold text-white" style={{ background: l.color }}>
               {l.name}
             </span>
           ))}
@@ -93,7 +93,7 @@ function QuickAdd({ columnId, open, setOpen }: { columnId: number; open: boolean
   const call = useCall()
   if (!open)
     return (
-      <button data-testid={`quick-add-open-${columnId}`} onClick={() => setOpen(true)} className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-xs text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800">
+      <button data-testid={`quick-add-open-${columnId}`} onClick={() => setOpen(true)} className="flex w-full items-center gap-1 rounded-[5px] px-2 py-1.5 text-left text-xs text-zinc-500 transition hover:bg-white hover:shadow-[0_1px_3px_rgba(16,24,40,.08)] dark:hover:bg-zinc-800">
         <Plus size={14} /> Adicionar cartão
       </button>
     )
@@ -186,7 +186,7 @@ function BoardColumn({
       ref={setNodeRef}
       data-testid={`column-${column.id}`}
       style={{ transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
-      className="flex max-h-full w-72 shrink-0 flex-col rounded-lg bg-zinc-100 dark:bg-zinc-900"
+      className="lane flex max-h-full w-72 shrink-0 flex-col"
     >
       <div className="flex items-center gap-1 px-2 pt-2" {...attributes} {...listeners}>
         {editing ? (
@@ -204,7 +204,7 @@ function BoardColumn({
             {column.name} <span className="font-normal text-zinc-400">{cards.length}</span>
           </div>
         )}
-        <span className="rounded bg-zinc-200 px-1.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">{CATEGORY_LABELS[column.category]}</span>
+        <span className="rounded-[3px] bg-white/70 px-1.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">{CATEGORY_LABELS[column.category]}</span>
         <div onPointerDown={(e) => e.stopPropagation()}>
           <Menu
             trigger={<button data-testid={`column-menu-${column.id}`} className="rounded p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800"><MoreHorizontal size={14} /></button>}
@@ -217,7 +217,7 @@ function BoardColumn({
           />
         </div>
       </div>
-      <div ref={setBodyRef} className={cx('flex min-h-12 flex-1 flex-col gap-2 overflow-y-auto p-2', isOver && 'bg-indigo-50 dark:bg-indigo-950/30')}>
+      <div ref={setBodyRef} className={cx('flex min-h-12 flex-1 flex-col gap-2 overflow-y-auto p-2 transition-colors', isOver && 'bg-indigo-100/60 dark:bg-indigo-950/30')}>
         <SortableContext items={cards.map((c) => `card:${c.id}`)} strategy={verticalListSortingStrategy}>
           {cards.map((c) => <SortableCard key={c.id} card={c} onOpen={() => openTask(c.id)} />)}
         </SortableContext>
@@ -279,10 +279,12 @@ export function BoardView({ boardId }: { boardId: number }) {
     qc.setQueryData(['boards.get', queryInput], (old: typeof data) => (old ? fn(old) : old))
 
   const onDragStart = (e: DragStartEvent) => {
+    document.body.classList.add('is-dragging')
     if (e.active.data.current?.type === 'card') setActiveCard(e.active.data.current.card as CardSummary)
   }
 
   const onDragEnd = async (e: DragEndEvent) => {
+    document.body.classList.remove('is-dragging')
     setActiveCard(null)
     const { active, over } = e
     if (!over) return
@@ -367,7 +369,7 @@ export function BoardView({ boardId }: { boardId: number }) {
           <input type="checkbox" checked={filters.archived} onChange={(e) => setFilters({ ...filters, archived: e.target.checked })} /> mostrar arquivados
         </label>
       </div>
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveCard(null)}>
+      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => { document.body.classList.remove('is-dragging'); setActiveCard(null) }}>
         <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto px-6 pb-4">
           <SortableContext items={columns.map((c) => `col:${c.id}`)} strategy={horizontalListSortingStrategy}>
             {columns.map((col) => (
@@ -381,7 +383,7 @@ export function BoardView({ boardId }: { boardId: number }) {
               />
             ))}
           </SortableContext>
-          <button data-testid="add-column" onClick={addColumn} className="flex w-60 shrink-0 items-center gap-1 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
+          <button data-testid="add-column" onClick={addColumn} className="flex w-60 shrink-0 items-center gap-1 rounded-md border border-dashed border-zinc-300 px-3 py-2 text-sm text-zinc-500 transition hover:bg-white hover:shadow-[var(--shadow-1)] dark:border-zinc-700 dark:hover:bg-zinc-900">
             <Plus size={14} /> Nova coluna
           </button>
         </div>

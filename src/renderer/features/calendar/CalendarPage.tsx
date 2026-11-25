@@ -26,12 +26,12 @@ function Item({ it, compact }: { it: CalendarItem; compact?: boolean }) {
       title={`${it.kind === 'start' ? 'Início: ' : ''}${t.title} — ${t.companyName} › ${t.projectName}`}
       className={cx(
         'flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] hover:brightness-95',
-        it.kind === 'start' ? 'bg-transparent text-zinc-500' : 'bg-white dark:bg-zinc-800',
+        it.kind === 'start' ? 'bg-transparent text-zinc-500' : 'bg-white shadow-[0_1px_2px_rgba(16,24,40,.08)] dark:bg-zinc-800',
         done && 'line-through opacity-50',
         t.isOverdue && it.kind === 'due' && 'text-red-600'
       )}
-      style={{ borderLeft: `3px solid ${t.companyColor}` }}
     >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-[2px]" style={{ background: t.companyColor }} />
       {it.kind === 'start' && <span>▶</span>}
       {t.isOverdue && it.kind === 'due' && <span className="font-bold">!</span>}
       {it.time && !compact && <span className="text-zinc-400">{it.time}</span>}
@@ -49,7 +49,7 @@ function MonthView({ anchor, weekStartsOn, byDay, onCreate, onDay }: { anchor: D
       <div className="grid grid-cols-7 text-center text-xs font-medium text-zinc-500">
         {grid[0].map((d) => <div key={d} className="py-1 capitalize">{format(parseLocalDate(d), 'EEE', { locale: ptBR })}</div>)}
       </div>
-      <div className="grid flex-1 grid-cols-7 grid-rows-6 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="surface grid flex-1 grid-cols-7 grid-rows-6 overflow-hidden">
         {grid.flat().map((d) => {
           const items = byDay[d] ?? []
           const inMonth = parseLocalDate(d).getMonth() === month
@@ -58,9 +58,9 @@ function MonthView({ anchor, weekStartsOn, byDay, onCreate, onDay }: { anchor: D
               key={d}
               data-testid={`cal-day-${d}`}
               onClick={() => onCreate(d)}
-              className={cx('min-h-0 cursor-pointer overflow-hidden border-b border-r border-zinc-200 p-1 dark:border-zinc-800', !inMonth && 'bg-zinc-50 dark:bg-zinc-900/60', 'hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20')}
+              className={cx('min-h-0 cursor-pointer overflow-hidden border-b border-r border-[var(--line)] p-1', !inMonth && 'bg-zinc-50 dark:bg-zinc-900/60', 'hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20')}
             >
-              <div className={cx('mb-0.5 text-xs', d === today ? 'inline-block rounded-full bg-indigo-600 px-1.5 text-white' : inMonth ? '' : 'text-zinc-400')}>{parseLocalDate(d).getDate()}</div>
+              <div className={cx('mb-0.5 text-xs', d === today ? 'inline-block rounded-[3px] bg-indigo-600 px-1.5 font-semibold text-white' : inMonth ? '' : 'text-zinc-400')}>{parseLocalDate(d).getDate()}</div>
               <div className="space-y-0.5">
                 {items.slice(0, 3).map((it) => <Item key={`${it.kind}${it.task.id}`} it={it} compact />)}
                 {items.length > 3 && (
@@ -80,8 +80,8 @@ function TimeGrid({ days, byDay, onCreate }: { days: string[]; byDay: Record<str
   useEffect(() => { scroller.current?.scrollTo({ top: 7 * HOUR_PX }) }, [])
   const today = toLocalDate(new Date())
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-6 pb-4">
-      <div className="grid border-b border-zinc-200 dark:border-zinc-800" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
+    <div className="surface mx-6 mb-4 flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="grid border-b border-[var(--line)]" style={{ gridTemplateColumns: `56px repeat(${days.length}, 1fr)` }}>
         <div />
         {days.map((d) => (
           <div key={d} className={cx('px-1 py-1 text-center text-xs capitalize', d === today && 'font-semibold text-indigo-600')}>
