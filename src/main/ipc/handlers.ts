@@ -15,6 +15,7 @@ import * as labels from '../services/labels'
 import * as comments from '../services/comments'
 import * as checklists from '../services/checklists'
 import * as attachments from '../services/attachments'
+import * as taskQuery from '../services/taskQuery'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
@@ -22,6 +23,21 @@ const nullableStr = z.string().nullable().optional()
 const projectStatus = z.enum(['planned', 'active', 'paused', 'completed'])
 const priority = z.enum(['low', 'medium', 'high', 'urgent'])
 const category = z.enum(['todo', 'in_progress', 'done'])
+export const taskFilter = z.object({
+  companyIds: z.array(zid).optional(),
+  projectIds: z.array(zid).optional(),
+  statuses: z.array(z.enum(['todo', 'in_progress', 'done'])).optional(),
+  priorities: z.array(z.enum(['low', 'medium', 'high', 'urgent'])).optional(),
+  labelIds: z.array(zid).optional(),
+  dueFrom: z.string().optional(),
+  dueTo: z.string().optional(),
+  scope: z.enum(['all', 'personal', 'professional']).optional(),
+  overdueOnly: z.boolean().optional(),
+  noDueOnly: z.boolean().optional(),
+  includeDone: z.boolean().optional(),
+  includeArchived: z.boolean().optional(),
+  text: z.string().optional()
+})
 const between = { beforeId: zid.nullable(), afterId: zid.nullable() }
 
 export const handlers = {
@@ -132,6 +148,9 @@ export const handlers = {
   'attachments.reveal': h(ID, (c, i) => sys.revealPath(attachments.getAttachmentAbsPath(c, i.id))),
   'attachments.delete': h(ID, (c, i) => attachments.deleteAttachment(c, i.id)),
   'attachments.thumbnail': h(ID, (c, i) => attachments.getAttachmentDataUrl(c, i.id)),
+  // task query
+  'tasks.query': h(z.object({ filter: taskFilter, sort: z.enum(['due', 'priority', 'created', 'updated']), limit: z.number().int().optional() }), (c, i) => taskQuery.queryTasks(c, i)),
+  'tasks.quickCreate': h(z.object({ projectId: zid, title: z.string(), dueAt: nullableStr, priority: priority.optional() }), (c, i) => taskQuery.quickCreateTask(c, i)),
   // @@end
 } satisfies Record<string, Handler>
 

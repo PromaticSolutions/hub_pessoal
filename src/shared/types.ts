@@ -140,3 +140,34 @@ export type CardSummary = {
   isOverdue: boolean
   status: ColumnCategory
 }
+
+export type TaskListItem = CardSummary & {
+  boardName: string
+  projectId: number
+  projectName: string
+  projectColor: string
+  companyId: number
+  companyName: string
+  companyColor: string
+  isPersonal: boolean
+  updatedAt: string
+  isNearDue: boolean
+}
+
+export type TaskFilter = {
+  companyIds?: number[]
+  projectIds?: number[]
+  statuses?: ColumnCategory[]
+  priorities?: Priority[]
+  labelIds?: number[]
+  dueFrom?: string
+  dueTo?: string
+  scope?: 'all' | 'personal' | 'professional'
+  overdueOnly?: boolean
+  noDueOnly?: boolean
+  includeDone?: boolean
+  includeArchived?: boolean
+  text?: string
+}
+
+export type TaskSort = 'due' | 'priority' | 'created' | 'updated'
