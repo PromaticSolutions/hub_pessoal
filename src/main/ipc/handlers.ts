@@ -11,6 +11,8 @@ import * as boards from '../services/boards'
 import * as columns from '../services/columns'
 import * as tasks from '../services/tasks'
 import * as labels from '../services/labels'
+import * as comments from '../services/comments'
+import * as checklists from '../services/checklists'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
@@ -92,6 +94,29 @@ export const handlers = {
   'labels.create': h(z.object({ name: z.string(), color: z.string() }), (c, i) => labels.createLabel(c, i)),
   'labels.update': h(z.object({ id: zid, name: z.string().optional(), color: z.string().optional() }), (c, { id, ...p }) => labels.updateLabel(c, id, p)),
   'labels.delete': h(ID, (c, i) => labels.deleteLabel(c, i.id)),
+  'tasks.get': h(ID, (c, i) => tasks.getTask(c, i.id)),
+  'tasks.update': h(
+    z.object({ id: zid, title: z.string().optional(), description: z.string().optional(), priority: priority.optional(), startAt: nullableStr, dueAt: nullableStr }),
+    (c, { id, ...p }) => tasks.updateTask(c, id, p)
+  ),
+  'tasks.duplicate': h(ID, (c, i) => tasks.duplicateTask(c, i.id)),
+  'tasks.archive': h(ID, (c, i) => tasks.archiveTask(c, i.id)),
+  'tasks.restore': h(ID, (c, i) => tasks.restoreTask(c, i.id)),
+  'tasks.delete': h(ID, (c, i) => tasks.deleteTask(c, i.id)),
+  'tasks.setLabels': h(z.object({ id: zid, labelIds: z.array(zid) }), (c, i) => tasks.setTaskLabels(c, i.id, i.labelIds)),
+  'activity.list': h(z.object({ taskId: zid }), (c, i) => tasks.listActivity(c, i.taskId)),
+  // comments
+  'comments.add': h(z.object({ taskId: zid, body: z.string() }), (c, i) => comments.addComment(c, i)),
+  'comments.update': h(z.object({ id: zid, body: z.string() }), (c, { id, ...p }) => comments.updateComment(c, id, p)),
+  'comments.delete': h(ID, (c, i) => comments.deleteComment(c, i.id)),
+  // checklists
+  'checklists.add': h(z.object({ taskId: zid, title: z.string().optional() }), (c, i) => checklists.addChecklist(c, i)),
+  'checklists.rename': h(z.object({ id: zid, title: z.string() }), (c, i) => checklists.renameChecklist(c, i.id, i.title)),
+  'checklists.delete': h(ID, (c, i) => checklists.deleteChecklist(c, i.id)),
+  'checklistItems.add': h(z.object({ checklistId: zid, text: z.string() }), (c, i) => checklists.addChecklistItem(c, i)),
+  'checklistItems.update': h(z.object({ id: zid, text: z.string().optional(), done: z.boolean().optional() }), (c, { id, ...p }) => checklists.updateChecklistItem(c, id, p)),
+  'checklistItems.move': h(z.object({ id: zid, checklistId: zid, ...between }), (c, i) => checklists.moveChecklistItem(c, i)),
+  'checklistItems.delete': h(ID, (c, i) => checklists.deleteChecklistItem(c, i.id)),
   // @@end
 } satisfies Record<string, Handler>
 
