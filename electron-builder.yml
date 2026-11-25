@@ -1,0 +1,15 @@
+appId: local.personal-task-hub
+productName: Personal Task Hub
+executableName: personal-task-hub
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+linux:
+  target: dir
+  icon: build/icon.png
+  category: Office
