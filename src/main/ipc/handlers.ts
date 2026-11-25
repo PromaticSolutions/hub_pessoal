@@ -17,6 +17,7 @@ import * as checklists from '../services/checklists'
 import * as attachments from '../services/attachments'
 import * as taskQuery from '../services/taskQuery'
 import * as dashboard from '../services/dashboard'
+import * as calendar from '../services/calendar'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
@@ -157,6 +158,7 @@ export const handlers = {
     z.object({ scope: z.union([z.enum(['all', 'personal', 'professional']), z.object({ companyId: zid }), z.object({ projectId: zid })]) }),
     (c, i) => dashboard.getDashboard(c, i)
   ),
+  'calendar.items': h(z.object({ from: z.string(), to: z.string(), filter: taskFilter }), (c, i) => calendar.getCalendarItems(c, i)),
   // @@end
 } satisfies Record<string, Handler>
 
