@@ -119,3 +119,24 @@ export type ActivityEntry = {
   newValue: string | null
   createdAt: string
 }
+
+export type CardSummary = {
+  id: number
+  boardId: number
+  columnId: number
+  title: string
+  priority: Priority
+  dueAt: string | null
+  startAt: string | null
+  position: number
+  archivedAt: string | null
+  completedAt: string | null
+  createdAt: string
+  labels: Label[]
+  checklistDone: number
+  checklistTotal: number
+  commentCount: number
+  attachmentCount: number
+  isOverdue: boolean
+  status: ColumnCategory
+}

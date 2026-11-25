@@ -1,4 +1,5 @@
-import type { Board } from '@shared/types'
+import type { Board, CardSummary, Column, Company, Project } from '@shared/types'
+import { CARD_COLS, toCards } from './cards'
 import { DEFAULT_COLUMNS } from '@shared/constants'
 import type { AppContext } from '../context'
 import { camel, camelAll, must, requireName } from '../lib/rows'
@@ -63,4 +64,17 @@ export function deleteBoard(ctx: AppContext, id: number): void {
   const files = collectAttachmentPaths(ctx.db, 't.board_id = ?', [id])
   ctx.db.prepare('DELETE FROM boards WHERE id = ?').run(id)
   for (const f of files) moveToDeleted(ctx.paths, f)
+}
+
+export type BoardFull = { board: Board; project: Project; company: Company; columns: Column[]; cards: CardSummary[] }
+
+export function getBoard(ctx: AppContext, id: number, opts: { includeArchived?: boolean }): BoardFull {
+  const board = getBoardRow(ctx, id)
+  const project = camel<Project>(ctx.db.prepare('SELECT * FROM projects WHERE id = ?').get(board.projectId) as Record<string, unknown>)
+  const company = camel<Company>(ctx.db.prepare('SELECT * FROM companies WHERE id = ?').get(project.companyId) as Record<string, unknown>)
+  const columns = camelAll<Column>(ctx.db.prepare('SELECT * FROM columns WHERE board_id = ? ORDER BY position, id').all(id))
+  const rows = ctx.db
+    .prepare(`SELECT ${CARD_COLS} FROM v_tasks t WHERE t.board_id = ? AND (? OR t.archived_at IS NULL) ORDER BY t.position, t.id`)
+    .all(id, opts.includeArchived ? 1 : 0) as Record<string, unknown>[]
+  return { board, project, company, columns, cards: toCards(ctx, rows) }
 }

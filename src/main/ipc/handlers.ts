@@ -8,6 +8,8 @@ import * as companies from '../services/companies'
 import * as folders from '../services/folders'
 import * as projects from '../services/projects'
 import * as boards from '../services/boards'
+import * as columns from '../services/columns'
+import * as tasks from '../services/tasks'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
@@ -71,11 +73,22 @@ export const handlers = {
   'boards.archive': h(ID, (c, i) => boards.archiveBoard(c, i.id)),
   'boards.restore': h(ID, (c, i) => boards.restoreBoard(c, i.id)),
   'boards.delete': h(ID, (c, i) => boards.deleteBoard(c, i.id)),
+  'boards.get': h(z.object({ id: zid, includeArchived: z.boolean().optional() }), (c, { id, ...o }) => boards.getBoard(c, id, o)),
+  // columns
+  'columns.create': h(z.object({ boardId: zid, name: z.string(), category, afterId: zid.nullable().optional() }), (c, i) => columns.createColumn(c, i)),
+  'columns.update': h(z.object({ id: zid, name: z.string().optional(), category: category.optional() }), (c, { id, ...p }) => columns.updateColumn(c, id, p)),
+  'columns.move': h(z.object({ id: zid, ...between }), (c, i) => columns.moveColumn(c, i)),
+  'columns.delete': h(z.object({ id: zid, moveTasksTo: zid.nullable() }), (c, i) => columns.deleteColumn(c, i)),
+  // tasks (core)
+  'tasks.create': h(
+    z.object({ columnId: zid, title: z.string(), afterId: zid.nullable().optional(), description: z.string().optional(), priority: priority.optional(), startAt: nullableStr, dueAt: nullableStr }),
+    (c, i) => tasks.createTask(c, i)
+  ),
+  'tasks.move': h(z.object({ id: zid, columnId: zid, ...between }), (c, i) => tasks.moveTask(c, i)),
+  'tasks.setStatus': h(z.object({ id: zid, status: category }), (c, i) => tasks.setTaskStatus(c, i.id, i.status)),
   // @@end
 } satisfies Record<string, Handler>
 
-void priority
-void category
 
 type Handlers = typeof handlers
 export type ApiMethods = {
