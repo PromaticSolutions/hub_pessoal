@@ -9,6 +9,7 @@ import { fileStamp } from './db/sqlutil'
 import { closeDatabase, listAutoBackups, purgeDeletedAttachments, quickCheck, runDailyAutoBackup } from './services/maintenance'
 import type { AppContext } from './context'
 import { restoreMissingAttachments } from './services/attachments'
+import { applyRestore } from './services/backup'
 import { dispatch, logError } from './ipc/registry'
 import { handlers } from './ipc/handlers'
 import { setMainHooks } from './mainHooks'
@@ -114,7 +115,19 @@ function boot(): void {
   ipcMain.handle('api', (_e, method: string, input: unknown) => dispatch(handlers, c, method, input))
   setMainHooks({
     getWindow: () => mainWindow,
-    getContext: () => ctx
+    getContext: () => ctx,
+    requestRestore: (stagingDir) => {
+      try {
+        mainWindow?.destroy()
+        if (ctx) closeDatabase(ctx.db)
+        ctx = null
+        applyRestore(paths, stagingDir, new Date())
+      } catch (err) {
+        dialog.showMessageBoxSync({ type: 'error', title: 'Personal Task Hub', message: 'Falha ao restaurar o backup.', detail: err instanceof Error ? err.message : String(err) })
+      }
+      if (!process.env.PTH_NO_RELAUNCH) app.relaunch()
+      app.exit(0)
+    }
   })
   mainWindow = createWindow()
 }

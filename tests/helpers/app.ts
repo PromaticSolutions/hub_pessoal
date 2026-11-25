@@ -10,7 +10,7 @@ export function makeTempDir(prefix: string): string {
 export async function launchApp(dataDir: string): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [resolve(__dirname, '../../out/main/index.js')],
-    env: { ...process.env, PTH_DATA_DIR: dataDir, ELECTRON_RUN_AS_NODE: '' }
+    env: { ...process.env, PTH_DATA_DIR: dataDir, ELECTRON_RUN_AS_NODE: '', PTH_NO_RELAUNCH: '1' }
   })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')

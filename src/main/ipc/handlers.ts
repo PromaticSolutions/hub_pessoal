@@ -19,6 +19,13 @@ import * as taskQuery from '../services/taskQuery'
 import * as dashboard from '../services/dashboard'
 import * as calendar from '../services/calendar'
 import * as searchSvc from '../services/search'
+import * as backup from '../services/backup'
+import { listAutoBackups } from '../services/maintenance'
+import { requestRestore } from '../mainHooks'
+import { basename, join, resolve, sep } from 'node:path'
+import { existsSync, statSync } from 'node:fs'
+import { LATEST_SCHEMA_VERSION } from '../db/migrate'
+import { fileStamp } from '../db/sqlutil'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
@@ -169,6 +176,36 @@ export const handlers = {
     }),
     (c, i) => searchSvc.search(c, i)
   ),
+  // backup
+  'backup.defaultPath': h(z.object({ kind: z.enum(['full', 'db']) }), (c, i) =>
+    join(sys.documentsDir(), 'PersonalTaskHub-backups', `personal-task-hub-${fileStamp(c.now())}.${i.kind === 'full' ? 'zip' : 'db'}`)
+  ),
+  'backup.createFull': h(z.object({ destPath: z.string() }), (c, i) => backup.createFullBackup(c, i.destPath, sys.appVersion())),
+  'backup.createDb': h(z.object({ destPath: z.string() }), (c, i) => backup.createDbBackup(c, i.destPath, sys.appVersion())),
+  'backup.inspect': h(z.object({ path: z.string() }), async (c, i) => {
+    const r = await backup.inspectBackup(c, i.path)
+    return { manifest: r.manifest, token: basename(r.stagingDir) }
+  }),
+  'backup.restore': h(z.object({ token: z.string() }), (c, i) => {
+    const dir = resolve(c.paths.restoreStaging, i.token)
+    if (!dir.startsWith(resolve(c.paths.restoreStaging) + sep) || !existsSync(dir)) throw new AppError('INVALID_BACKUP', 'Backup preparado não encontrado. Selecione o arquivo novamente.')
+    setTimeout(() => requestRestore(dir), 150)
+  }),
+  'backup.listAuto': h(z.object({}), (c) => listAutoBackups(c.paths)),
+  'backup.restoreAuto': h(z.object({ file: z.string() }), async (c, i) => {
+    const f = resolve(i.file)
+    if (!f.startsWith(resolve(c.paths.backupsAuto) + sep)) throw new AppError('VALIDATION', 'Backup automático inválido.')
+    const r = await backup.inspectBackup(c, f)
+    setTimeout(() => requestRestore(r.stagingDir), 150)
+    return r.manifest
+  }),
+  // system info
+  'system.dataStats': h(z.object({}), (c) => {
+    const size = (f: string) => (existsSync(f) ? statSync(f).size : 0)
+    const row = c.db.prepare('SELECT count(*) n, coalesce(sum(size_bytes), 0) s FROM attachments').get() as { n: number; s: number }
+    return { dataPath: c.paths.root, dbBytes: size(c.paths.dbFile) + size(`${c.paths.dbFile}-wal`), attachmentsBytes: row.s, attachmentCount: row.n }
+  }),
+  'system.appInfo': h(z.object({}), () => ({ version: sys.appVersion(), schemaVersion: LATEST_SCHEMA_VERSION, electron: process.versions.electron })),
   // @@end
 } satisfies Record<string, Handler>
 
