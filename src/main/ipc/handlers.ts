@@ -10,6 +10,7 @@ import * as projects from '../services/projects'
 import * as boards from '../services/boards'
 import * as columns from '../services/columns'
 import * as tasks from '../services/tasks'
+import * as labels from '../services/labels'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
@@ -86,6 +87,11 @@ export const handlers = {
   ),
   'tasks.move': h(z.object({ id: zid, columnId: zid, ...between }), (c, i) => tasks.moveTask(c, i)),
   'tasks.setStatus': h(z.object({ id: zid, status: category }), (c, i) => tasks.setTaskStatus(c, i.id, i.status)),
+  // labels
+  'labels.list': h(z.object({}), (c) => labels.listLabels(c)),
+  'labels.create': h(z.object({ name: z.string(), color: z.string() }), (c, i) => labels.createLabel(c, i)),
+  'labels.update': h(z.object({ id: zid, name: z.string().optional(), color: z.string().optional() }), (c, { id, ...p }) => labels.updateLabel(c, id, p)),
+  'labels.delete': h(ID, (c, i) => labels.deleteLabel(c, i.id)),
   // @@end
 } satisfies Record<string, Handler>
 

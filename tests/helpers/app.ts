@@ -24,3 +24,16 @@ export async function invoke<T = any>(page: Page, method: string, input: unknown
   if (!env.ok) throw new Error(`${method}: ${env.error?.message}`)
   return env.data as T
 }
+
+export async function dragTo(page: Page, from: string, to: string, opts: { yOffset?: number } = {}): Promise<void> {
+  const a = await page.locator(from).boundingBox()
+  const b = await page.locator(to).boundingBox()
+  if (!a || !b) throw new Error(`dragTo: element not found ${!a ? from : to}`)
+  await page.mouse.move(a.x + a.width / 2, a.y + 10)
+  await page.mouse.down()
+  await page.mouse.move(a.x + a.width / 2 + 10, a.y + 20, { steps: 5 })
+  await page.mouse.move(b.x + b.width / 2, b.y + (opts.yOffset ?? 10), { steps: 15 })
+  await page.waitForTimeout(150)
+  await page.mouse.up()
+  await page.waitForTimeout(400)
+}
