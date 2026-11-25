@@ -16,6 +16,7 @@ import * as comments from '../services/comments'
 import * as checklists from '../services/checklists'
 import * as attachments from '../services/attachments'
 import * as taskQuery from '../services/taskQuery'
+import * as dashboard from '../services/dashboard'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
@@ -151,6 +152,11 @@ export const handlers = {
   // task query
   'tasks.query': h(z.object({ filter: taskFilter, sort: z.enum(['due', 'priority', 'created', 'updated']), limit: z.number().int().optional() }), (c, i) => taskQuery.queryTasks(c, i)),
   'tasks.quickCreate': h(z.object({ projectId: zid, title: z.string(), dueAt: nullableStr, priority: priority.optional() }), (c, i) => taskQuery.quickCreateTask(c, i)),
+  // dashboard
+  'dashboard.get': h(
+    z.object({ scope: z.union([z.enum(['all', 'personal', 'professional']), z.object({ companyId: zid }), z.object({ projectId: zid })]) }),
+    (c, i) => dashboard.getDashboard(c, i)
+  ),
   // @@end
 } satisfies Record<string, Handler>
 

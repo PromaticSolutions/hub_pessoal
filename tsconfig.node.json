@@ -12,5 +12,5 @@
     "paths": { "@shared/*": ["src/shared/*"], "@main/*": ["src/main/*"] },
     "noEmit": true
   },
-  "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "tests/**/*", "*.config.ts"]
+  "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "tests/**/*", "*.config.ts", "*.config.mts"]
 }
