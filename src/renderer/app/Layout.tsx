@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { DialogsProvider } from '../features/companies/dialogs'
+import { TaskModalHost } from '../features/task-modal/TaskModal'
 
 export function Layout() {
   return (
@@ -11,6 +12,7 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+      <TaskModalHost />
     </DialogsProvider>
   )
 }
