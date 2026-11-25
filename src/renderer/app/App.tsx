@@ -1,3 +1,27 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { HashRouter } from 'react-router-dom'
+import { ToastProvider } from '../components/toast'
+import { ConfirmProvider, PromptProvider } from '../components/ui'
+import { AppRoutes } from './routes'
+import { ThemeController } from './ThemeController'
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 0, refetchOnWindowFocus: false, retry: false } }
+})
+
 export default function App() {
-  return <h1 className="p-6 text-xl font-semibold">Personal Task Hub</h1>
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <ConfirmProvider>
+          <PromptProvider>
+            <ThemeController />
+            <HashRouter>
+              <AppRoutes />
+            </HashRouter>
+          </PromptProvider>
+        </ConfirmProvider>
+      </ToastProvider>
+    </QueryClientProvider>
+  )
 }

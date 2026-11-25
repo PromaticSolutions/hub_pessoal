@@ -16,3 +16,11 @@ export async function launchApp(dataDir: string): Promise<{ app: ElectronApplica
   await page.waitForLoadState('domcontentloaded')
   return { app, page }
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function invoke<T = any>(page: Page, method: string, input: unknown = {}): Promise<T> {
+  const res = await page.evaluate(([m, i]) => (window as unknown as { api: { invoke(m: string, i: unknown): Promise<unknown> } }).api.invoke(m as string, i), [method, input] as const)
+  const env = res as { ok: boolean; data?: T; error?: { message: string } }
+  if (!env.ok) throw new Error(`${method}: ${env.error?.message}`)
+  return env.data as T
+}
