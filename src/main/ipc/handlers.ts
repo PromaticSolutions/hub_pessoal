@@ -18,6 +18,7 @@ import * as attachments from '../services/attachments'
 import * as taskQuery from '../services/taskQuery'
 import * as dashboard from '../services/dashboard'
 import * as calendar from '../services/calendar'
+import * as searchSvc from '../services/search'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
@@ -159,6 +160,15 @@ export const handlers = {
     (c, i) => dashboard.getDashboard(c, i)
   ),
   'calendar.items': h(z.object({ from: z.string(), to: z.string(), filter: taskFilter }), (c, i) => calendar.getCalendarItems(c, i)),
+  'search.query': h(
+    z.object({
+      text: z.string(),
+      types: z.array(z.enum(['task', 'comment', 'project', 'company', 'attachment'])).optional(),
+      filter: taskFilter.extend({ createdFrom: z.string().optional(), createdTo: z.string().optional() }).optional(),
+      limit: z.number().int().optional()
+    }),
+    (c, i) => searchSvc.search(c, i)
+  ),
   // @@end
 } satisfies Record<string, Handler>
 
