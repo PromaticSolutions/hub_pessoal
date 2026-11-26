@@ -23,7 +23,7 @@ import { api } from '../../lib/api'
 import { cx, formatShort } from '../../lib/format'
 import { useToast } from '../../components/toast'
 import { computeColumnDrop, computeDrop } from './dnd'
-import { ColorDialog, softBg } from '../../components/ColorChoice'
+import { ColorDialog, boardBg, softBg } from '../../components/ColorChoice'
 
 type Filters = { text: string; labelId: number | null; priority: Priority | ''; archived: boolean }
 
@@ -383,7 +383,6 @@ export function BoardView({ boardId }: { boardId: number }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" ref={rootRef} data-testid={`board-${boardId}`}>
-      {data.board.color && <div className="mx-6 mb-2 h-[3px] rounded-full opacity-80" style={{ background: data.board.color }} />}
       <div className="glass mx-6 mb-3 flex flex-wrap items-center gap-2 rounded-md px-3 py-2">
         <Input className="w-56" placeholder="Filtrar cartões…" value={filters.text} onChange={(e) => setFilters({ ...filters, text: e.target.value })} />
         <Select value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value as Priority | '' })}>
@@ -399,7 +398,11 @@ export function BoardView({ boardId }: { boardId: number }) {
         </label>
       </div>
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => { document.body.classList.remove('is-dragging'); setActiveCard(null) }}>
-        <div className="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto px-6 pb-4">
+        <div
+          data-testid="board-canvas"
+          className={cx('flex min-h-0 flex-1 items-start gap-3 overflow-x-auto pb-4', data.board.color ? 'mx-6 mb-4 rounded-lg p-3' : 'px-6')}
+          style={{ background: boardBg(data.board.color) }}
+        >
           <SortableContext items={columns.map((c) => `col:${c.id}`)} strategy={horizontalListSortingStrategy}>
             {columns.map((col) => (
               <BoardColumn

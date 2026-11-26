@@ -11,6 +11,10 @@
   --line: rgba(16, 24, 40, 0.08);
   --line-strong: rgba(16, 24, 40, 0.14);
   --surface-glass: rgba(255, 255, 255, 0.86);
+  --lane-glass: rgba(255, 255, 255, 0.55);
+  --check-border: #b8bec9;
+  --text: #18181b;
+  color-scheme: light;
   --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 14px rgba(16, 24, 40, 0.06);
   --shadow-2: 0 2px 4px rgba(16, 24, 40, 0.06), 0 14px 30px rgba(16, 24, 40, 0.12);
   --shadow-3: 0 4px 8px rgba(16, 24, 40, 0.08), 0 24px 56px rgba(16, 24, 40, 0.18);
@@ -22,6 +26,10 @@
   --line: rgba(255, 255, 255, 0.07);
   --line-strong: rgba(255, 255, 255, 0.13);
   --surface-glass: rgba(23, 23, 27, 0.86);
+  --lane-glass: rgba(39, 39, 42, 0.5);
+  --check-border: #52525b;
+  --text: #f4f4f5;
+  color-scheme: dark;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45), 0 4px 14px rgba(0, 0, 0, 0.35);
   --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.5), 0 14px 30px rgba(0, 0, 0, 0.5);
   --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.55), 0 24px 56px rgba(0, 0, 0, 0.6);
@@ -32,8 +40,47 @@ body {
   font-family: 'Inter Variable', system-ui, sans-serif;
   font-size: 14px;
   background: var(--page);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background-color: rgba(113, 113, 122, 0.32);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover { background-color: rgba(113, 113, 122, 0.6); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Checkboxes */
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin: 0;
+  display: inline-grid;
+  place-content: center;
+  vertical-align: middle;
+  border: 1.5px solid var(--check-border);
+  border-radius: 4px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+input[type='checkbox']:hover { border-color: #818cf8; }
+input[type='checkbox']:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.28); }
+input[type='checkbox']:checked {
+  border-color: #4f46e5;
+  background: #4f46e5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
+input[type='checkbox'].accent-emerald-600:checked { border-color: #059669; background-color: #059669; }
+input[type='checkbox']:disabled { opacity: 0.4; cursor: not-allowed; }
 
 @layer components {
   /* floating panel */
@@ -76,8 +123,12 @@ body {
   }
   /* kanban / week lanes */
   .lane {
-    background: var(--lane);
+    background: var(--lane-glass);
+    border: 1px solid var(--line);
     border-radius: 6px;
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    backdrop-filter: blur(10px) saturate(1.2);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   }
   /* task card */
   .card {

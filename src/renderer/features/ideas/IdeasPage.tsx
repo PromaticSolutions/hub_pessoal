@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { LayoutGrid, Lightbulb, List, Paperclip } from 'lucide-react'
+import { LayoutGrid, Lightbulb, List, Paperclip, Plus } from 'lucide-react'
 import type { ApiMethods } from '@shared/api'
 import type { IdeaStatus, Priority } from '@shared/types'
 import { IDEA_STATUSES, IDEA_STATUS_LABELS, PRIORITIES, PRIORITY_LABELS } from '@shared/constants'
-import { Dot, EmptyState, Input, PageHeader, PriorityBadge, Select } from '../../components/ui'
+import { Button, Dot, EmptyState, Input, PageHeader, PriorityBadge, Select, usePrompt } from '../../components/ui'
 import { useApiQuery, useCall } from '../../lib/queries'
 import { api } from '../../lib/api'
 import { cx, formatDate } from '../../lib/format'
@@ -71,12 +71,23 @@ export default function IdeasPage() {
   const { data: tree } = useApiQuery('spaces.tree', {})
   const { data: labels } = useApiQuery('labels.list', {})
   const call = useCall()
+  const prompt = usePrompt()
   const list = ideas ?? []
   const setView = (v: 'cards' | 'list') => { setViewLocal(v); api('settings.set', { key: 'ideas.view', value: v }).catch(() => {}) }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader title={<><Lightbulb size={20} className="text-amber-500" /> Ideias</>}>
+        <Button
+          variant="primary"
+          data-testid="idea-new"
+          onClick={async () => {
+            const title = await prompt({ title: 'Nova ideia', label: 'Título da ideia', confirmLabel: 'Criar' })
+            if (title) { const i = await call('ideas.create', { title }); setOpen(i.id) }
+          }}
+        >
+          <Plus size={14} /> Nova ideia
+        </Button>
         <div className="flex overflow-hidden rounded-[5px] border border-[var(--line-strong)]">
           <button data-testid="ideas-view-cards" onClick={() => setView('cards')} className={cx('flex items-center gap-1 px-2.5 py-1.5 text-sm', view === 'cards' ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800')}><LayoutGrid size={14} /> Cards</button>
           <button data-testid="ideas-view-list" onClick={() => setView('list')} className={cx('flex items-center gap-1 px-2.5 py-1.5 text-sm', view === 'list' ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800')}><List size={14} /> Lista</button>
@@ -91,7 +102,10 @@ export default function IdeasPage() {
             setQuick('')
           }}
         >
-          <Input data-testid="idea-quick" className="h-10 text-[15px]" placeholder="💡 Anote uma ideia e tecle Enter…" value={quick} onChange={(e) => setQuick(e.target.value)} />
+          <div className="flex gap-2">
+            <Input data-testid="idea-quick" className="h-10 text-[15px]" placeholder="Anote uma ideia e tecle Enter…" value={quick} onChange={(e) => setQuick(e.target.value)} />
+            <Button type="submit" variant="primary" className="h-10 shrink-0" data-testid="idea-add" disabled={!quick.trim()}><Plus size={15} /> Adicionar ideia</Button>
+          </div>
         </form>
         <div className="glass flex flex-wrap items-center gap-2 rounded-md px-3 py-2">
           <Input className="w-56" placeholder="Buscar…" value={text} onChange={(e) => setText(e.target.value)} />

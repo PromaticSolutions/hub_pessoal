@@ -44,4 +44,6 @@ export function ColorDialog({ open, title, value, onPick, onClose }: { open: boo
 }
 
 /** Column/board background: the color blended softly into the lane color (works in light and dark). */
-export const softBg = (color: string | null | undefined, pct = 8) => (color ? `color-mix(in srgb, ${color} ${pct}%, var(--lane))` : undefined)
+export const softBg = (color: string | null | undefined, pct = 14) => (color ? `color-mix(in srgb, ${color} ${pct}%, var(--lane-glass))` : undefined)
+/** Whole-board background tint. */
+export const boardBg = (color: string | null | undefined) => (color ? `color-mix(in srgb, ${color} 12%, var(--page))` : undefined)
