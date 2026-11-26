@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'CONFLICT'
   | 'SCHEMA_TOO_NEW'
   | 'INVALID_BACKUP'
+  | 'UNAUTHORIZED'
   | 'INTERNAL'
 
 export class AppError extends Error {

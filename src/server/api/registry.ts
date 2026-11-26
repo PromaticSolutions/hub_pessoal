@@ -1,5 +1,3 @@
-import { appendFileSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
 import { z } from 'zod'
 import type { AppContext } from '../context'
 import { AppError } from '../lib/errors'
@@ -15,11 +13,11 @@ export function h<S extends z.ZodType, R>(schema: S, fn: (ctx: AppContext, input
 
 export type Envelope = { ok: true; data: unknown } | { ok: false; error: { code: string; message: string } }
 
-export function logError(ctx: AppContext, method: string, err: unknown): void {
+/** Logs an unexpected error (method + message + stack; never inputs, env or headers). */
+export function logError(method: string, err: unknown): void {
   try {
-    mkdirSync(ctx.paths.logs, { recursive: true })
     const detail = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err)
-    appendFileSync(join(ctx.paths.logs, 'main.log'), `[${new Date().toISOString()}] ${method}: ${detail}\n`)
+    console.error(`[rpc] ${method}: ${detail}`)
   } catch {
     /* logging must never throw */
   }
@@ -39,7 +37,7 @@ export async function dispatch(handlers: Record<string, Handler<any, any>>, ctx:
     return { ok: true, data: data === undefined ? null : data }
   } catch (err) {
     if (err instanceof AppError) return { ok: false, error: { code: err.code, message: err.message } }
-    logError(ctx, method, err)
-    return { ok: false, error: { code: 'INTERNAL', message: 'Erro inesperado. Detalhes registrados em logs/main.log.' } }
+    logError(method, err)
+    return { ok: false, error: { code: 'INTERNAL', message: 'Erro inesperado no servidor. Tente novamente.' } }
   }
 }

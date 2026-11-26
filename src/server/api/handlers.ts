@@ -1,9 +1,8 @@
 import { z } from 'zod'
 import type { Handler } from './registry'
 import { h } from './registry'
-import { AppError } from '../lib/errors'
+import { version as APP_VERSION } from '../../../package.json'
 import { getAllSettings, getSetting, setSetting } from '../services/settings'
-import * as sys from './system'
 
 import * as companies from '../services/companies'
 import * as folders from '../services/folders'
@@ -26,12 +25,8 @@ import * as widgetData from '../services/widgetData'
 import * as calendar from '../services/calendar'
 import * as searchSvc from '../services/search'
 import * as backup from '../services/backup'
-import { listAutoBackups } from '../services/maintenance'
-import { requestRestore } from '../mainHooks'
-import { basename, join, resolve, sep } from 'node:path'
-import { existsSync, statSync } from 'node:fs'
+import { AppError } from '../lib/errors'
 import { LATEST_SCHEMA_VERSION } from '../db/migrate'
-import { fileStamp } from '../db/sqlutil'
 
 const zid = z.number().int()
 const ID = z.object({ id: zid })
@@ -88,30 +83,31 @@ const widgetConfig = z.object({
   limit: z.number().int().optional()
 })
 const between = { beforeId: zid.nullable(), afterId: zid.nullable() }
+const uploadRef = z.object({ key: z.string(), name: z.string(), size: z.number().int().nonnegative(), mime: z.string() })
+const STAT_TABLES = ['companies', 'projects', 'tasks', 'attachments', 'ideas', 'shopping_items'] as const
 
 export const handlers = {
   // settings
   'settings.get': h(z.object({ key: z.string() }), (c, i) => getSetting<unknown>(c.db, i.key, null)),
   'settings.set': h(z.object({ key: z.string(), value: z.unknown() }), (c, i) => setSetting(c.db, i.key, i.value)),
   'settings.all': h(z.object({}), (c) => getAllSettings(c.db)),
-  // system
-  'system.dataPath': h(z.object({}), (c) => c.paths.root),
-  'system.openDataFolder': h(z.object({}), async (c) => { await sys.openPath(c.paths.root) }),
-  'system.pickFiles': h(z.object({ multiple: z.boolean(), images: z.boolean().optional() }), (_c, i) => sys.pickFiles(i)),
-  'system.pickSavePath': h(z.object({ defaultPath: z.string() }), (_c, i) => sys.pickSavePath(i.defaultPath)),
-  'system.pickOpenPath': h(z.object({ extensions: z.array(z.string()) }), (_c, i) => sys.pickOpenPath(i.extensions)),
+  // files (browser uploads go straight to Storage)
+  'files.uploadUrl': h(z.object({ name: z.string() }), async (c, i) => {
+    const key = attachments.newUploadKey(i.name)
+    return { key, url: await c.storage.signedUploadUrl(key) }
+  }),
   // companies
   'companies.list': h(z.object({ includeArchived: z.boolean().optional() }), (c, i) => companies.listCompanies(c, i)),
   'companies.get': h(ID, (c, i) => companies.getCompany(c, i.id)),
   'companies.create': h(z.object({ name: z.string(), description: z.string().optional(), color: z.string() }), (c, i) => companies.createCompany(c, i)),
   'companies.update': h(z.object({ id: zid, name: z.string().optional(), description: z.string().optional(), color: z.string().optional() }), (c, { id, ...p }) => companies.updateCompany(c, id, p)),
-  'companies.setLogo': h(z.object({ id: zid, sourcePath: z.string().nullable() }), (c, i) => companies.setCompanyLogo(c, i.id, i.sourcePath)),
+  'companies.setLogo': h(z.object({ id: zid, upload: uploadRef.nullable() }), (c, i) => companies.setCompanyLogo(c, i.id, i.upload)),
   'companies.archive': h(ID, (c, i) => companies.archiveCompany(c, i.id)),
   'companies.restore': h(ID, (c, i) => companies.restoreCompany(c, i.id)),
   'companies.deletionImpact': h(ID, (c, i) => companies.getCompanyDeletionImpact(c, i.id)),
   'companies.delete': h(ID, (c, i) => companies.deleteCompany(c, i.id)),
   'companies.reorder': h(z.object({ id: zid, ...between }), (c, { id, ...w }) => companies.reorderCompany(c, id, w)),
-  'companies.logoDataUrl': h(ID, (c, i) => companies.getCompanyLogoDataUrl(c, i.id)),
+  'companies.logoUrl': h(ID, (c, i) => companies.getCompanyLogoUrl(c, i.id)),
   // spaces / folders
   'spaces.tree': h(z.object({ includeArchived: z.boolean().optional() }), (c, i) => projects.getSpaceTree(c, i)),
   'folders.create': h(z.object({ companyId: zid, parentId: zid.nullable(), name: z.string() }), (c, i) => folders.createFolder(c, i)),
@@ -185,18 +181,13 @@ export const handlers = {
   'checklistItems.move': h(z.object({ id: zid, checklistId: zid, ...between }), (c, i) => checklists.moveChecklistItem(c, i)),
   'checklistItems.delete': h(ID, (c, i) => checklists.deleteChecklistItem(c, i.id)),
   // attachments
-  'attachments.add': h(z.object({ taskId: zid.optional(), projectId: zid.optional(), ideaId: zid.optional(), sourcePaths: z.array(z.string()).min(1) }), (c, i) => attachments.addAttachments(c, i)),
+  'attachments.add': h(z.object({ taskId: zid.optional(), projectId: zid.optional(), ideaId: zid.optional(), uploads: z.array(uploadRef).min(1) }), (c, i) => attachments.addAttachments(c, i)),
   'attachments.list': h(
     z.object({ companyId: zid.optional(), projectId: zid.optional(), taskId: zid.optional(), ideaId: zid.optional(), kind: z.enum(['image', 'pdf', 'document', 'other']).optional(), text: z.string().optional(), includeArchived: z.boolean().optional() }),
     (c, i) => attachments.listAttachments(c, i)
   ),
-  'attachments.open': h(ID, async (c, i) => {
-    const err = await sys.openPath(attachments.getAttachmentAbsPath(c, i.id))
-    if (err) throw new AppError('INTERNAL', err)
-  }),
-  'attachments.reveal': h(ID, (c, i) => sys.revealPath(attachments.getAttachmentAbsPath(c, i.id))),
+  'attachments.url': h(z.object({ id: zid, download: z.boolean().optional() }), (c, i) => attachments.getAttachmentUrl(c, i.id, { download: i.download })),
   'attachments.delete': h(ID, (c, i) => attachments.deleteAttachment(c, i.id)),
-  'attachments.thumbnail': h(ID, (c, i) => attachments.getAttachmentDataUrl(c, i.id)),
   // task query
   'tasks.query': h(z.object({ filter: taskFilter, sort: z.enum(['due', 'priority', 'created', 'updated', 'status']), limit: z.number().int().optional() }), (c, i) => taskQuery.queryTasks(c, i)),
   'tasks.quickCreate': h(z.object({ projectId: zid, title: z.string(), dueAt: nullableStr, priority: priority.optional() }), (c, i) => taskQuery.quickCreateTask(c, i)),
@@ -215,40 +206,28 @@ export const handlers = {
     }),
     (c, i) => searchSvc.search(c, i)
   ),
-  // backup
-  'backup.defaultPath': h(z.object({ kind: z.enum(['full', 'db']) }), (c, i) =>
-    join(sys.documentsDir(), 'PersonalTaskHub-backups', `personal-task-hub-${fileStamp(c.now())}.${i.kind === 'full' ? 'zip' : 'db'}`)
-  ),
-  'backup.createFull': h(z.object({ destPath: z.string() }), (c, i) => backup.createFullBackup(c, i.destPath, sys.appVersion())),
-  'backup.createDb': h(z.object({ destPath: z.string() }), (c, i) => backup.createDbBackup(c, i.destPath, sys.appVersion())),
-  'backup.inspect': h(z.object({ path: z.string() }), async (c, i) => {
-    const r = await backup.inspectBackup(c, i.path)
-    return { manifest: r.manifest, token: basename(r.stagingDir) }
+  // backup (gzipped JSON in Storage)
+  'backup.create': h(z.object({}), async (c) => {
+    const r = await backup.createBackup(c, 'manual')
+    const url = await c.storage.signedUrl(r.key, { downloadName: `personal-task-hub-${backup.fileStamp(c.now())}.json.gz` })
+    return { url, manifest: r.manifest }
   }),
-  'backup.restore': h(z.object({ token: z.string() }), (c, i) => {
-    const dir = resolve(c.paths.restoreStaging, i.token)
-    if (!dir.startsWith(resolve(c.paths.restoreStaging) + sep) || !existsSync(dir)) throw new AppError('INVALID_BACKUP', 'Backup preparado não encontrado. Selecione o arquivo novamente.')
-    setTimeout(() => requestRestore(dir), 150)
-  }),
-  'backup.listAuto': h(z.object({}), (c) => listAutoBackups(c.paths)),
-  'backup.restoreAuto': h(z.object({ file: z.string() }), async (c, i) => {
-    const f = resolve(i.file)
-    if (!f.startsWith(resolve(c.paths.backupsAuto) + sep)) throw new AppError('VALIDATION', 'Backup automático inválido.')
-    const r = await backup.inspectBackup(c, f)
-    setTimeout(() => requestRestore(r.stagingDir), 150)
-    return r.manifest
+  'backup.inspect': h(z.object({ key: z.string() }), (c, i) => backup.inspectBackup(c, i.key)),
+  'backup.restore': h(z.object({ key: z.string() }), async (c, i) => (await backup.restoreBackup(c, i.key)).manifest),
+  'backup.listAuto': h(z.object({}), (c) => backup.listAutoBackups(c)),
+  'backup.restoreAuto': h(z.object({ key: z.string() }), async (c, i) => {
+    if (!i.key.startsWith(backup.AUTO_PREFIX)) throw new AppError('VALIDATION', 'Backup automático inválido.')
+    return (await backup.restoreBackup(c, i.key)).manifest
   }),
   // system info
-  'system.dataStats': h(z.object({}), (c) => {
-    const size = (f: string) => (existsSync(f) ? statSync(f).size : 0)
-    const row = c.db.prepare('SELECT count(*) n, coalesce(sum(size_bytes), 0) s FROM attachments').get() as { n: number; s: number }
-    return { dataPath: c.paths.root, dbBytes: size(c.paths.dbFile) + size(`${c.paths.dbFile}-wal`), attachmentsBytes: row.s, attachmentCount: row.n }
+  'system.dataStats': h(z.object({}), async (c) => {
+    const counts: Record<string, number> = {}
+    for (const t of STAT_TABLES) counts[t] = (await c.db.one<{ n: number }>(`SELECT count(*) n FROM ${t}`))!.n
+    const att = (await c.db.one<{ n: number; s: number }>('SELECT count(*) n, coalesce(sum(size_bytes), 0) s FROM attachments'))!
+    const storageBytes = (await c.storage.list('')).reduce((n, f) => n + f.size, 0)
+    return { counts, storageBytes, attachmentCount: att.n, attachmentsBytes: att.s }
   }),
-  'system.appInfo': h(z.object({}), () => ({ version: sys.appVersion(), schemaVersion: LATEST_SCHEMA_VERSION, electron: process.versions.electron })),
-  'system.openExternal': h(z.object({ url: z.string() }), async (_c, i) => {
-    if (!/^(https?:\/\/|mailto:)/i.test(i.url)) throw new AppError('VALIDATION', 'Só links http(s) e mailto podem ser abertos.')
-    await sys.openExternal(i.url)
-  }),
+  'system.appInfo': h(z.object({}), () => ({ version: APP_VERSION, schemaVersion: LATEST_SCHEMA_VERSION })),
   'tasks.bulk': h(
     z.object({
       ids: z.array(zid).min(1),

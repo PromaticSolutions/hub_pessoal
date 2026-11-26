@@ -1,15 +1,13 @@
-import { readFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
 import { z } from 'zod'
-import { dispatch, h } from '@main/ipc/registry'
-import { AppError } from '@main/lib/errors'
-import { logActivity } from '@main/lib/activity'
-import { createTestDb } from '../helpers/db'
+import { dispatch, h } from '@server/api/registry'
+import { AppError } from '@server/lib/errors'
+import { logActivity } from '@server/lib/activity'
+import { createTestCtx } from '../helpers/ctx'
 
-let t: ReturnType<typeof createTestDb>
-beforeEach(() => { t = createTestDb() })
-afterEach(() => t.cleanup())
-const ctx = () => ({ db: t.db, paths: t.paths, now: () => new Date() })
+let T: Awaited<ReturnType<typeof createTestCtx>>
+beforeEach(async () => { T = await createTestCtx() })
+afterEach(() => T.cleanup())
+const ctx = () => T.ctx
 
 const handlers = {
   'x.echo': h(z.object({ n: z.number() }), (_c, i) => i.n * 2),
@@ -31,20 +29,24 @@ test('dispatch retorna NOT_FOUND quando o handler lança AppError', async () => 
 })
 
 test('dispatch retorna INTERNAL sem vazar detalhes e registra em log', async () => {
-  const r = await dispatch(handlers, ctx(), 'x.boom', {})
-  expect(r).toMatchObject({ ok: false, error: { code: 'INTERNAL' } })
-  expect(JSON.stringify(r)).not.toContain('secret stack detail')
-  const log = join(t.paths.logs, 'main.log')
-  expect(existsSync(log) && readFileSync(log, 'utf8')).toContain('secret stack detail')
+  const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    const r = await dispatch(handlers, ctx(), 'x.boom', {})
+    expect(r).toMatchObject({ ok: false, error: { code: 'INTERNAL' } })
+    expect(JSON.stringify(r)).not.toContain('secret stack detail')
+    expect(spy.mock.calls.map((c) => c.join(' ')).join('\n')).toContain('secret stack detail')
+  } finally {
+    spy.mockRestore()
+  }
 })
 
 test('método desconhecido retorna NOT_FOUND', async () => {
   expect(await dispatch(handlers, ctx(), 'nope', {})).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
 })
 
-test('logActivity grava old/new serializados', () => {
-  t.db.exec("INSERT INTO projects(company_id, name, color) VALUES (1, 'P', '#000')")
-  logActivity(t.db, { entityType: 'project', entityId: 1, action: 'updated', field: 'dates', oldValue: { a: 1 }, newValue: 'x' })
-  const row = t.db.prepare('SELECT * FROM activity_log').get() as Record<string, unknown>
+test('logActivity grava old/new serializados', async () => {
+  await T.ctx.db.exec("INSERT INTO projects(company_id, name, color) VALUES (1, 'P', '#000')")
+  await logActivity(T.ctx.db, { entityType: 'project', entityId: 1, action: 'updated', field: 'dates', oldValue: { a: 1 }, newValue: 'x' })
+  const row = (await T.ctx.db.one('SELECT * FROM activity_log'))!
   expect(row).toMatchObject({ entity_type: 'project', entity_id: 1, action: 'updated', field: 'dates', old_value: '{"a":1}', new_value: 'x', task_id: null })
 })
