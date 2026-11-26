@@ -1,0 +1,9 @@
+.env
+.env.*
+.data/
+.superpowers/
+.claude/
+node_modules/
+.vercel/
+test-results/
+supabase/
