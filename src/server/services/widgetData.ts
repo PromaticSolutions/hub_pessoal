@@ -71,6 +71,7 @@ export async function getWidgetData(ctx: AppContext, input: { widget: { type: Wi
           rows: [
             { key: 'todo', label: CATEGORY_LABELS.todo, value: k.todo, color: '#94A3B8' },
             { key: 'in_progress', label: CATEGORY_LABELS.in_progress, value: k.inProgress, color: '#0EA5E9' },
+            { key: 'review', label: CATEGORY_LABELS.review, value: k.review, color: '#F59E0B' },
             { key: 'done', label: CATEGORY_LABELS.done, value: k.done, color: '#10B981' }
           ]
         }

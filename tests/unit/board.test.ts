@@ -64,7 +64,7 @@ test('ordem preservada após vários moves', async () => {
 test('colunas: criar após, mover, excluir com destino e sem destino', async () => {
   const { boardId, cols } = await setup()
   const x = await createColumn(T.ctx, { boardId, name: 'X', category: 'todo', afterId: cols[0].id })
-  expect((await getBoard(T.ctx, boardId, {})).columns.map((c) => c.name)).toEqual(['Backlog', 'X', 'A fazer', 'Em andamento', 'Em revisão', 'Concluído'])
+  expect((await getBoard(T.ctx, boardId, {})).columns.map((c) => c.name)).toEqual(['Backlog', 'X', 'A fazer', 'Em andamento', 'Em validação', 'Concluído'])
   await moveColumn(T.ctx, { id: x.id, beforeId: cols[4].id, afterId: null })
   expect((await getBoard(T.ctx, boardId, {})).columns.map((c) => c.name).at(-1)).toBe('X')
   await createTask(T.ctx, { columnId: x.id, title: 'T1' })

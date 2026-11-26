@@ -16,8 +16,9 @@ export function dueEnd(dueAt: string | null): string | null {
   return dueAt.length === 10 ? `${dueAt}T23:59` : dueAt.slice(0, 16)
 }
 
-export function isOverdue(dueAt: string | null, status: 'todo' | 'in_progress' | 'done', now: Date): boolean {
-  if (!dueAt || status === 'done') return false
+/** Tasks in validation are delivered (awaiting sign-off): like done, they are never overdue. */
+export function isOverdue(dueAt: string | null, status: 'todo' | 'in_progress' | 'review' | 'done', now: Date): boolean {
+  if (!dueAt || status === 'done' || status === 'review') return false
   return (dueEnd(dueAt) as string) < toLocalMinute(now)
 }
 

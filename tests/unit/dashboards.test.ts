@@ -75,7 +75,7 @@ test('dados dos blocos batem com os serviços existentes; fonte herdada e sobres
   expect(await kpi('dayBlocks')).toMatchObject({ value: 1 })
   const chart = async (data: string) => await getWidgetData(T.ctx, { widget: { type: 'chart', config: { ...inherit, chart: 'bar', data } as never }, dashboardScope: 'all' })
   expect(await chart('byPriority')).toMatchObject({ kind: 'chart', rows: expect.arrayContaining([expect.objectContaining({ label: 'Urgente', value: 1 })]) })
-  expect(await chart('byStatus')).toMatchObject({ rows: [{ label: 'A fazer', value: 2 }, { label: 'Em andamento', value: 0 }, { label: 'Concluído', value: 1 }] })
+  expect(await chart('byStatus')).toMatchObject({ rows: [{ label: 'A fazer', value: 2 }, { label: 'Em andamento', value: 0 }, { label: 'Em validação', value: 0 }, { label: 'Concluído', value: 1 }] })
   expect((await chart('byCompany') as { rows: unknown[] }).rows).toHaveLength(2)
   expect((await chart('byProject') as unknown as { rows: { label: string }[] }).rows.map((r) => r.label).sort()).toEqual(['P', 'Pessoal P'])
   expect((await chart('createdVsCompleted') as { rows: unknown[] }).rows).toHaveLength(8)

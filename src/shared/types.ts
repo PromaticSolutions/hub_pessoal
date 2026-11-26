@@ -1,5 +1,5 @@
 export type Priority = 'low' | 'medium' | 'high' | 'urgent'
-export type ColumnCategory = 'todo' | 'in_progress' | 'done'
+export type ColumnCategory = 'todo' | 'in_progress' | 'review' | 'done'
 export type ProjectStatus = 'planned' | 'active' | 'paused' | 'completed'
 export type CompanyStatus = 'active' | 'archived'
 

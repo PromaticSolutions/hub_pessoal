@@ -89,7 +89,8 @@ export async function importDataset(db: Db, ds: Dataset, opts: { replace: boolea
   if (ds.manifest.schemaVersion > LATEST_SCHEMA_VERSION) {
     throw new AppError('SCHEMA_TOO_NEW', 'Estes dados foram criados por uma versão mais nova do aplicativo.')
   }
-  if (ds.manifest.schemaVersion !== LATEST_SCHEMA_VERSION) {
+  // v1 data fits v2 unchanged (v2 only widened the column category check).
+  if (!(ds.manifest.schemaVersion >= 1)) {
     throw new AppError('INVALID_BACKUP', `Versão de dados não suportada: ${ds.manifest.schemaVersion}.`)
   }
   const unknown = Object.keys(ds.tables).filter((t) => !TABLES_IN_ORDER.includes(t))

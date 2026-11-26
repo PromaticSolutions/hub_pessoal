@@ -21,7 +21,7 @@ test('projeto novo tem quadro com 5 colunas nas categorias certas', async () => 
     { name: 'Backlog', category: 'todo' },
     { name: 'A fazer', category: 'todo' },
     { name: 'Em andamento', category: 'in_progress' },
-    { name: 'Em revisão', category: 'in_progress' },
+    { name: 'Em validação', category: 'review' },
     { name: 'Concluído', category: 'done' }
   ])
   expect(d.company.isPersonal).toBe(true)

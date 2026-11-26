@@ -9,7 +9,7 @@ import type { DashboardScope } from '@shared/widgets'
 export type { DashboardScope }
 
 export type DashboardData = {
-  kpis: { total: number; todo: number; inProgress: number; done: number; overdue: number; nearDue: number; activeProjects: number; companies: number }
+  kpis: { total: number; todo: number; inProgress: number; review: number; done: number; overdue: number; nearDue: number; activeProjects: number; companies: number }
   byPriority: { priority: Priority; count: number }[]
   byCompany: { companyId: number; name: string; color: string; low: number; medium: number; high: number; urgent: number }[]
   completedPerWeek: { weekStart: string; count: number }[]
@@ -34,6 +34,7 @@ export async function getDashboard(ctx: AppContext, input: { scope: DashboardSco
     total: all.length,
     todo: all.filter((t) => t.status === 'todo').length,
     inProgress: all.filter((t) => t.status === 'in_progress').length,
+    review: all.filter((t) => t.status === 'review').length,
     done: all.filter((t) => t.status === 'done').length,
     overdue: open.filter((t) => t.isOverdue).length,
     nearDue: open.filter((t) => t.isNearDue).length,

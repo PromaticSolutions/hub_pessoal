@@ -28,6 +28,7 @@ export function BulkBar({ ids, onDone }: { ids: number[]; onDone: () => void }) 
         <option value="">Status…</option>
         <option value="todo">A fazer</option>
         <option value="in_progress">Em andamento</option>
+            <option value="review">Em validação</option>
         <option value="done">Concluído</option>
       </Select>
       <Select data-testid="bulk-priority" value="" onChange={(e) => e.target.value && run({ kind: 'priority', priority: e.target.value as Priority }, 'Prioridade alterada')}>

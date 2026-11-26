@@ -21,10 +21,11 @@ export function StatusChip({ status }: { status: ColumnCategory }) {
         'inline-flex items-center gap-1 rounded-[3px] px-1.5 py-0.5 text-[11px] font-medium',
         status === 'todo' && 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
         status === 'in_progress' && 'bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300',
+        status === 'review' && 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
         status === 'done' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
       )}
     >
-      <span className={cx('h-1.5 w-1.5 rounded-full', status === 'todo' && 'bg-zinc-400', status === 'in_progress' && 'bg-sky-500', status === 'done' && 'bg-emerald-500')} />
+      <span className={cx('h-1.5 w-1.5 rounded-full', status === 'todo' && 'bg-zinc-400', status === 'in_progress' && 'bg-sky-500', status === 'review' && 'bg-amber-500', status === 'done' && 'bg-emerald-500')} />
       {CATEGORY_LABELS[status]}
     </span>
   )
@@ -103,6 +104,7 @@ export default function AllTasksPage() {
             <option value="">Todos os status</option>
             <option value="todo">A fazer</option>
             <option value="in_progress">Em andamento</option>
+            <option value="review">Em validação</option>
             <option value="done">Concluído</option>
           </Select>
           <Select value={filter.labelIds?.[0] ?? ''} onChange={(e) => set({ labelIds: e.target.value ? [Number(e.target.value)] : undefined })}>

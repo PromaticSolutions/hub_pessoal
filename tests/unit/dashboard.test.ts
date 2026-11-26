@@ -29,7 +29,7 @@ async function seed() {
   const done = await mk(pa.cols, 'a4', { due: '2026-11-10' })
   await setTaskStatus(T.ctx, done.id, 'done')
   await mk(pb.cols, 'b1', { due: '2026-11-25', prio: 'low' }) // hoje: próxima, não atrasada
-  await mk(pb.cols, 'b2', { col: 3 }) // em revisão (in_progress)
+  await mk(pb.cols, 'b2', { col: 3 }) // em validação (review)
   await mk(pp.cols, 'p1', { due: '2026-12-20' })
   const arch = await proj(a.id)
   await mk(arch.cols, 'arq', { due: '2026-11-01' })
@@ -41,7 +41,7 @@ async function seed() {
 test('KPIs exatos ignorando projeto arquivado', async () => {
   await seed()
   const d = await getDashboard(T.ctx, { scope: 'all' })
-  expect(d.kpis).toEqual({ total: 7, todo: 4, inProgress: 2, done: 1, overdue: 1, nearDue: 2, activeProjects: 2, companies: 2 })
+  expect(d.kpis).toEqual({ total: 7, todo: 4, inProgress: 1, review: 1, done: 1, overdue: 1, nearDue: 2, activeProjects: 2, companies: 2 })
   expect(d.byPriority).toEqual([
     { priority: 'urgent', count: 1 },
     { priority: 'high', count: 2 },
@@ -73,6 +73,6 @@ test('escopos: profissional, empresa e projeto', async () => {
   const s = await seed()
   expect((await getDashboard(T.ctx, { scope: 'professional' })).kpis.total).toBe(6)
   expect((await getDashboard(T.ctx, { scope: 'personal' })).kpis.total).toBe(1)
-  expect((await getDashboard(T.ctx, { scope: { companyId: s.b.id } })).kpis).toMatchObject({ total: 2, inProgress: 1, activeProjects: 0 })
+  expect((await getDashboard(T.ctx, { scope: { companyId: s.b.id } })).kpis).toMatchObject({ total: 2, review: 1, activeProjects: 0 })
   expect((await getDashboard(T.ctx, { scope: { projectId: s.pa.p.id } })).kpis).toMatchObject({ total: 4, done: 1, overdue: 1 })
 })

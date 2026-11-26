@@ -2,11 +2,15 @@ import { TEMPLATES, scopeFromV1 } from '@shared/widgets'
 import { AppError } from '../lib/errors'
 import type { Db } from './db'
 import initialSql from './schema/001_initial.sql?raw'
+import reviewSql from './schema/002_review_category.sql?raw'
 
 export type Migration = { version: number; name: string; sql: string }
 
 /** Postgres schema v1 = SQLite schema v7 of the desktop app. */
-export const migrations: Migration[] = [{ version: 1, name: 'initial', sql: initialSql }]
+export const migrations: Migration[] = [
+  { version: 1, name: 'initial', sql: initialSql },
+  { version: 2, name: 'review_category', sql: reviewSql }
+]
 export const LATEST_SCHEMA_VERSION = migrations[migrations.length - 1].version
 
 // Serialises concurrent migrators (two deploys, script + dev server).

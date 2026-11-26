@@ -33,11 +33,11 @@ const ID = z.object({ id: zid })
 const nullableStr = z.string().nullable().optional()
 const projectStatus = z.enum(['planned', 'active', 'paused', 'completed'])
 const priority = z.enum(['low', 'medium', 'high', 'urgent'])
-const category = z.enum(['todo', 'in_progress', 'done'])
+const category = z.enum(['todo', 'in_progress', 'review', 'done'])
 export const taskFilter = z.object({
   companyIds: z.array(zid).optional(),
   projectIds: z.array(zid).optional(),
-  statuses: z.array(z.enum(['todo', 'in_progress', 'done'])).optional(),
+  statuses: z.array(z.enum(['todo', 'in_progress', 'review', 'done'])).optional(),
   priorities: z.array(z.enum(['low', 'medium', 'high', 'urgent'])).optional(),
   labelIds: z.array(zid).optional(),
   dueFrom: z.string().optional(),

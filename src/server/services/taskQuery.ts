@@ -37,7 +37,7 @@ export function buildTaskWhere(ctx: AppContext, f: TaskFilter): { where: string;
   if (f.dueTo) { w.push('substr(t.due_at, 1, 10) <= ?'); p.push(f.dueTo) }
   if (f.scope === 'personal') w.push('t.is_personal = 1')
   if (f.scope === 'professional') w.push('t.is_personal = 0')
-  if (f.overdueOnly) { w.push("t.status <> 'done' AND t.due_end < ?"); p.push(toLocalMinute(ctx.now())) }
+  if (f.overdueOnly) { w.push("t.status NOT IN ('done', 'review') AND t.due_end < ?"); p.push(toLocalMinute(ctx.now())) }
   if (f.noDueOnly) w.push('t.due_at IS NULL')
   if (f.includeDone === false) w.push("t.status <> 'done'")
   if (f.text?.trim()) { w.push('t.title ILIKE ?'); p.push(`%${f.text.trim()}%`) }
@@ -62,7 +62,7 @@ export async function decorate(ctx: AppContext, rows: Record<string, unknown>[])
     t.scheduled = scheduled.has(t.id)
     const end = dueEnd(t.dueAt)
     t.isPersonal = Boolean(t.isPersonal)
-    t.isNearDue = !!end && t.status !== 'done' && end >= nowMin && end.slice(0, 10) <= limit
+    t.isNearDue = !!end && t.status !== 'done' && t.status !== 'review' && end >= nowMin && end.slice(0, 10) <= limit
     return t
   })
 }
@@ -76,7 +76,7 @@ export async function queryTasks(ctx: AppContext, input: { filter: TaskFilter; s
     priority: `${PRIO_SQL}, t.due_at IS NULL, t.due_end NULLS FIRST, t.id`,
     created: 't.created_at DESC, t.id DESC',
     updated: 't.updated_at DESC, t.id DESC',
-    status: `CASE t.status WHEN 'todo' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, t.due_at IS NULL, t.due_end NULLS FIRST, ${PRIO_SQL}, t.id`
+    status: `CASE t.status WHEN 'todo' THEN 0 WHEN 'in_progress' THEN 1 WHEN 'review' THEN 2 ELSE 3 END, t.due_at IS NULL, t.due_end NULLS FIRST, ${PRIO_SQL}, t.id`
   }[input.sort]
   const rows = await ctx.db.many(
     `SELECT ${LIST_COLS} FROM v_tasks t WHERE ${where} ORDER BY ${order} ${input.limit ? `LIMIT ${Number(input.limit)}` : ''}`,

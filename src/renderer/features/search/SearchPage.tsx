@@ -41,6 +41,7 @@ export default function SearchPage() {
             <option value="">Todos os status</option>
             <option value="todo">A fazer</option>
             <option value="in_progress">Em andamento</option>
+            <option value="review">Em validação</option>
             <option value="done">Concluído</option>
           </Select>
           criada entre <Input type="date" className="w-36" value={filter.createdFrom ?? ''} onChange={(e) => setFilter({ ...filter, createdFrom: e.target.value || undefined })} />

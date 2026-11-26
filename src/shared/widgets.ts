@@ -3,7 +3,7 @@ import type { TaskFilter } from './types'
 export type DashboardScope = 'all' | 'personal' | 'professional' | { companyId: number } | { projectId: number }
 export type WidgetType = 'kpi' | 'summary' | 'chart' | 'taskList' | 'projects' | 'shopping'
 export type KpiMetric =
-  | 'total' | 'todo' | 'inProgress' | 'done' | 'overdue' | 'nearDue' | 'activeProjects' | 'companies'
+  | 'total' | 'todo' | 'inProgress' | 'review' | 'done' | 'overdue' | 'nearDue' | 'activeProjects' | 'companies'
   | 'shoppingPending' | 'shoppingMonth' | 'ideasNew' | 'dayBlocks'
 export type ChartData = 'byPriority' | 'byStatus' | 'byCompany' | 'byProject' | 'productivity' | 'createdVsCompleted' | 'shoppingByCategory'
 export type ChartKind = 'bar' | 'stackedBar' | 'line' | 'pie' | 'donut' | 'table'
@@ -27,6 +27,7 @@ export const KPI_LABELS: Record<KpiMetric, string> = {
   total: 'Total de tarefas',
   todo: 'Pendentes',
   inProgress: 'Em andamento',
+  review: 'Em validação',
   done: 'Concluídas',
   overdue: 'Atrasadas',
   nearDue: 'Vencendo em breve',
