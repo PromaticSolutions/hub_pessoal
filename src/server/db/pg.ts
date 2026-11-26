@@ -29,19 +29,51 @@ function txDb(s: postgres.TransactionSql): Db {
 }
 
 /**
- * Production Db over postgres.js. `prepare: false` because the Supabase transaction pooler
- * does not keep prepared statements. Use the SESSION pooler (5432): through the transaction pooler (6543) postgres.js pipelined queries hang.
+ * Limits in-flight work to `size` so postgres.js never pipelines several queries on one
+ * connection: through the Supabase transaction pooler (6543) pipelined queries hang.
+ * A transaction holds its slot until it ends; queries inside it run on its own connection.
+ */
+function gate(size: number) {
+  let active = 0
+  const waiting: (() => void)[] = []
+  return async <T>(fn: () => Promise<T>): Promise<T> => {
+    if (active < size) active++
+    else await new Promise<void>((resolve) => waiting.push(resolve))
+    try {
+      return await fn()
+    } finally {
+      const next = waiting.shift()
+      if (next) next()
+      else active--
+    }
+  }
+}
+
+const POOL_SIZE = 4
+
+/**
+ * Production Db over postgres.js, for the Supabase transaction pooler (6543): `prepare: false`
+ * (no prepared statements there) and `gate` (no pipelining). Few connections per instance keeps
+ * many serverless instances under the pooler's client limits.
  */
 export function createPgDb(url: string): Db {
   const numberType = { to: 20, from: [...NUMBER_OIDS], serialize: (v: unknown) => String(v), parse: parseNumber }
   const sql = postgres(url, {
     prepare: false,
-    max: 8,
+    max: POOL_SIZE,
     idle_timeout: 20,
     onnotice: () => {},
     types: { number8: numberType }
   })
-  const db = wrap(sql, (fn) => sql.begin((s) => fn(txDb(s))) as Promise<never>)
+  const inner = wrap(sql, (fn) => sql.begin((s) => fn(txDb(s))) as Promise<never>)
+  const run = gate(POOL_SIZE)
+  const db: Db = {
+    one: (t, p) => run(() => inner.one(t, p)),
+    many: (t, p) => run(() => inner.many(t, p)),
+    run: (t, p) => run(() => inner.run(t, p)),
+    exec: (t) => run(() => inner.exec(t)),
+    tx: (fn) => run(() => inner.tx(fn))
+  }
   owners.set(db, sql)
   return db
 }
