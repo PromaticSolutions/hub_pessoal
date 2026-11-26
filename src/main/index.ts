@@ -13,6 +13,9 @@ import { dispatch, logError } from './ipc/registry'
 import { handlers } from './ipc/handlers'
 import { setMainHooks } from './mainHooks'
 
+// Portuguese UI for Chromium widgets (date pickers, spellcheck, number formats).
+app.commandLine.appendSwitch('lang', 'pt-BR')
+
 let mainWindow: BrowserWindow | null = null
 let ctx: AppContext | null = null
 

@@ -152,6 +152,7 @@ export type TaskListItem = CardSummary & {
   isPersonal: boolean
   updatedAt: string
   isNearDue: boolean
+  scheduled?: boolean
 }
 
 export type TaskFilter = {
