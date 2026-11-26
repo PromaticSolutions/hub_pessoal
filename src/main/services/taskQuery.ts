@@ -48,7 +48,18 @@ export function decorate(ctx: AppContext, rows: Record<string, unknown>[]): Task
   const nowMin = toLocalMinute(now)
   const nearDays = getSetting(ctx.db, 'nearDueDays', 7)
   const limit = toLocalDate(addDays(now, nearDays))
-  return toCards<TaskListItem>(ctx, rows).map((t) => {
+  const items = toCards<TaskListItem>(ctx, rows)
+  const scheduled = new Set<number>()
+  const ids = items.map((t) => t.id)
+  for (let i = 0; i < ids.length; i += 500) {
+    const chunk = ids.slice(i, i + 500)
+    if (!chunk.length) break
+    for (const r of ctx.db
+      .prepare(`SELECT DISTINCT task_id FROM day_blocks WHERE date >= ? AND task_id IN (${chunk.map(() => '?').join(',')})`)
+      .all(toLocalDate(now), ...chunk) as { task_id: number }[]) scheduled.add(r.task_id)
+  }
+  return items.map((t) => {
+    t.scheduled = scheduled.has(t.id)
     const end = dueEnd(t.dueAt)
     t.isPersonal = Boolean(t.isPersonal)
     t.isNearDue = !!end && t.status !== 'done' && end >= nowMin && end.slice(0, 10) <= limit

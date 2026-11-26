@@ -1,7 +1,8 @@
 import type {
   ActivityEntry, Attachment, Board, Checklist, ChecklistItem, Column, ColumnCategory, Comment, Company, Label, Priority, Project, Task
 } from '@shared/types'
-import { isOverdue } from '@shared/dates'
+import { isOverdue, toLocalDate } from '@shared/dates'
+import { scheduledFor } from './dayBlocks'
 import { CATEGORY_LABELS } from '@shared/constants'
 import type { AppContext } from '../context'
 import { AppError } from '../lib/errors'
@@ -92,6 +93,7 @@ export type TaskDetail = Task & {
   comments: Comment[]
   attachments: Attachment[]
   isOverdue: boolean
+  scheduled: { date: string; startTime: string; endTime: string }[]
 }
 
 export function getTask(ctx: AppContext, id: number): TaskDetail {
@@ -111,7 +113,8 @@ export function getTask(ctx: AppContext, id: number): TaskDetail {
     checklists: listChecklists(ctx, id),
     comments: listComments(ctx, id),
     attachments: camelAll<Attachment>(ctx.db.prepare('SELECT * FROM attachments WHERE task_id = ? ORDER BY created_at, id').all(id)),
-    isOverdue: isOverdue(t.dueAt, column.category, ctx.now())
+    isOverdue: isOverdue(t.dueAt, column.category, ctx.now()),
+    scheduled: scheduledFor(ctx, id, toLocalDate(ctx.now()))
   }
 }
 

@@ -18,6 +18,7 @@ import * as attachments from '../services/attachments'
 import * as taskQuery from '../services/taskQuery'
 import * as dashboard from '../services/dashboard'
 import * as bulk from '../services/bulk'
+import * as dayBlocks from '../services/dayBlocks'
 import * as calendar from '../services/calendar'
 import * as searchSvc from '../services/search'
 import * as backup from '../services/backup'
@@ -228,6 +229,20 @@ export const handlers = {
     }),
     (c, i) => bulk.bulkUpdate(c, i)
   ),
+  // meu dia
+  'dayBlocks.list': h(z.object({ date: z.string() }), (c, i) => dayBlocks.listBlocks(c, i)),
+  'dayBlocks.create': h(
+    z.object({ date: z.string(), startTime: z.string(), endTime: z.string(), taskId: zid.nullable().optional(), title: z.string().nullable().optional(), note: z.string().optional(), color: z.string().nullable().optional() }),
+    (c, i) => dayBlocks.createBlock(c, i)
+  ),
+  'dayBlocks.update': h(
+    z.object({ id: zid, date: z.string().optional(), startTime: z.string().optional(), endTime: z.string().optional(), taskId: zid.nullable().optional(), title: z.string().nullable().optional(), note: z.string().optional(), color: z.string().nullable().optional() }),
+    (c, { id, ...p }) => dayBlocks.updateBlock(c, id, p)
+  ),
+  'dayBlocks.move': h(z.object({ id: zid, date: z.string(), startTime: z.string() }), (c, i) => dayBlocks.moveBlock(c, i)),
+  'dayBlocks.setDone': h(z.object({ id: zid, done: z.boolean() }), (c, i) => dayBlocks.setBlockDone(c, i.id, i.done)),
+  'dayBlocks.delete': h(ID, (c, i) => dayBlocks.deleteBlock(c, i.id)),
+  'dayBlocks.copyFromDay': h(z.object({ from: z.string(), to: z.string() }), (c, i) => dayBlocks.copyFromDay(c, i)),
   // @@end
 } satisfies Record<string, Handler>
 
