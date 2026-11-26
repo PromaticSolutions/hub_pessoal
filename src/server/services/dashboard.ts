@@ -1,6 +1,6 @@
 import type { Priority, TaskFilter, TaskListItem } from '@shared/types'
 import { PRIORITIES } from '@shared/constants'
-import { addDays, getWeekRange } from '@shared/dates'
+import { addDays, getWeekRange, parseLocalDate } from '@shared/dates'
 import type { AppContext } from '../context'
 import { getSetting } from './settings'
 import { buildTaskWhere, queryTasks } from './taskQuery'
@@ -25,9 +25,9 @@ export function scopeFilter(scope: DashboardScope): TaskFilter {
   return { projectIds: [scope.projectId] }
 }
 
-export function getDashboard(ctx: AppContext, input: { scope: DashboardScope }): DashboardData {
+export async function getDashboard(ctx: AppContext, input: { scope: DashboardScope }): Promise<DashboardData> {
   const filter = scopeFilter(input.scope)
-  const all = queryTasks(ctx, { filter, sort: 'due' })
+  const all = await queryTasks(ctx, { filter, sort: 'due' })
   const open = all.filter((t) => t.status !== 'done')
 
   const kpis = {
@@ -38,7 +38,7 @@ export function getDashboard(ctx: AppContext, input: { scope: DashboardScope }):
     overdue: open.filter((t) => t.isOverdue).length,
     nearDue: open.filter((t) => t.isNearDue).length,
     activeProjects: 0,
-    companies: (ctx.db.prepare("SELECT count(*) n FROM companies WHERE status = 'active' AND is_personal = 0").get() as { n: number }).n
+    companies: (await ctx.db.one<{ n: number }>("SELECT count(*) n FROM companies WHERE status = 'active' AND is_personal = 0"))!.n
   }
   const pw: string[] = ["p.status = 'active'", 'p.archived_at IS NULL', "co.status = 'active'"]
   const pp: unknown[] = []
@@ -47,7 +47,7 @@ export function getDashboard(ctx: AppContext, input: { scope: DashboardScope }):
   else if (s === 'professional') pw.push('co.is_personal = 0')
   else if (typeof s === 'object' && 'companyId' in s) { pw.push('co.id = ?'); pp.push(s.companyId) }
   else if (typeof s === 'object' && 'projectId' in s) { pw.push('p.id = ?'); pp.push(s.projectId) }
-  kpis.activeProjects = (ctx.db.prepare(`SELECT count(*) n FROM projects p JOIN companies co ON co.id = p.company_id WHERE ${pw.join(' AND ')}`).get(...pp) as { n: number }).n
+  kpis.activeProjects = (await ctx.db.one<{ n: number }>(`SELECT count(*) n FROM projects p JOIN companies co ON co.id = p.company_id WHERE ${pw.join(' AND ')}`, pp))!.n
 
   const byPriority = PRIORITIES.map((priority) => ({ priority, count: open.filter((t) => t.priority === priority).length }))
 
@@ -59,15 +59,20 @@ export function getDashboard(ctx: AppContext, input: { scope: DashboardScope }):
   }
   const byCompany = [...companyMap.values()].sort((a, b) => b.urgent + b.high + b.medium + b.low - (a.urgent + a.high + a.medium + a.low))
 
-  const weekStartsOn = getSetting<0 | 1>(ctx.db, 'weekStartsOn', 1)
+  const weekStartsOn = await getSetting<0 | 1>(ctx.db, 'weekStartsOn', 1)
   const now = ctx.now()
   const weeks = Array.from({ length: 8 }, (_, i) => getWeekRange(addDays(now, -7 * (7 - i)), weekStartsOn))
   const { where, params } = buildTaskWhere(ctx, filter)
-  const countIn = (col: 'created_at' | 'completed_at', start: string, end: string) =>
-    (ctx.db
-      .prepare(`SELECT count(*) n FROM v_tasks t WHERE ${where} AND t.${col} IS NOT NULL AND date(t.${col}, 'localtime') BETWEEN ? AND ?`)
-      .get(...params, start, end) as { n: number }).n
-  const createdVsCompleted = weeks.map((w) => ({ weekStart: w.start, created: countIn('created_at', w.start, w.end), completed: countIn('completed_at', w.start, w.end) }))
+  // Local-day bounds computed in JS (UTC ISO instants), since created_at/completed_at are UTC ISO text.
+  const countIn = async (col: 'created_at' | 'completed_at', start: string, end: string) =>
+    (await ctx.db.one<{ n: number }>(
+      `SELECT count(*) n FROM v_tasks t WHERE ${where} AND t.${col} IS NOT NULL AND t.${col} >= ? AND t.${col} < ?`,
+      [...params, parseLocalDate(start).toISOString(), addDays(parseLocalDate(end), 1).toISOString()]
+    ))!.n
+  const createdVsCompleted: DashboardData['createdVsCompleted'] = []
+  for (const w of weeks) {
+    createdVsCompleted.push({ weekStart: w.start, created: await countIn('created_at', w.start, w.end), completed: await countIn('completed_at', w.start, w.end) })
+  }
   const completedPerWeek = createdVsCompleted.map((w) => ({ weekStart: w.weekStart, count: w.completed }))
 
   return {
