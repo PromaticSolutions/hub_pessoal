@@ -4,6 +4,7 @@ import { Search } from 'lucide-react'
 import { Dot } from '../../components/ui'
 import { useApiQuery } from '../../lib/queries'
 import { cx } from '../../lib/format'
+import { attachmentOrigin } from '../../lib/attachmentOrigin'
 
 type Row = { key: string; group: string; label: string; sub?: string; color?: string; go: () => void }
 
@@ -43,7 +44,8 @@ export function CommandPalette() {
     data.comments.forEach((c) => r.push({ key: `c${c.id}`, group: 'Comentários', label: c.snippet, sub: `em "${c.taskTitle}"`, color: c.companyColor, go: () => { close(); nav({ pathname: loc.pathname, search: `?task=${c.taskId}` }) } }))
     data.projects.forEach((p) => r.push({ key: `p${p.id}`, group: 'Projetos', label: p.name, sub: p.companyName, color: p.color, go: () => { close(); nav(`/projects/${p.id}`) } }))
     data.companies.forEach((c) => r.push({ key: `e${c.id}`, group: 'Empresas', label: c.name, color: c.color, go: () => { close(); nav(`/spaces/${c.id}`) } }))
-    data.attachments.forEach((a) => r.push({ key: `a${a.id}`, group: 'Arquivos', label: a.originalName, sub: a.taskTitle ? `em "${a.taskTitle}"` : a.projectName, color: a.companyColor, go: () => { close(); nav(a.taskId ? `/projects/${a.projectId}?task=${a.taskId}` : `/projects/${a.projectId}`) } }))
+    data.ideas.forEach((i) => r.push({ key: `i${i.id}`, group: 'Ideias', label: i.title, sub: i.category || undefined, color: '#EAB308', go: () => { close(); nav(`/ideas?idea=${i.id}`) } }))
+    data.attachments.forEach((a) => { const o = attachmentOrigin(a); r.push({ key: `a${a.id}`, group: 'Arquivos', label: a.originalName, sub: o.label, color: o.color, go: () => { close(); nav(o.href) } }) })
     r.push({ key: 'all', group: '', label: `Ver todos os resultados para "${debounced}"`, go: () => { close(); nav(`/search?q=${encodeURIComponent(debounced)}`) } })
     return r
     // eslint-disable-next-line react-hooks/exhaustive-deps

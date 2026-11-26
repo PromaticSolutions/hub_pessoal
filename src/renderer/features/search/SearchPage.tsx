@@ -6,6 +6,7 @@ import { useApiQuery } from '../../lib/queries'
 import { formatShort } from '../../lib/format'
 import { TaskFilters } from '../week/TaskFilters'
 import { Highlight } from './CommandPalette'
+import { attachmentOrigin } from '../../lib/attachmentOrigin'
 import { useOpenTask } from '../board/BoardView'
 
 type Tab = 'tasks' | 'comments' | 'projects' | 'companies' | 'attachments'
@@ -88,8 +89,8 @@ export default function SearchPage() {
               <Link key={c.id} to={`/spaces/${c.id}`} className="flex items-center gap-2 rounded p-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"><Dot color={c.color} /> {c.name}</Link>
             ))}
             {tab === 'attachments' && data.attachments.map((a) => (
-              <Link key={a.id} to={a.taskId ? `/projects/${a.projectId}?task=${a.taskId}` : `/projects/${a.projectId}`} className="flex items-center gap-2 rounded p-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900">
-                <Dot color={a.companyColor} /> {a.originalName} <span className="text-xs text-zinc-500">{a.taskTitle ?? a.projectName}</span>
+              <Link key={a.id} to={attachmentOrigin(a).href} className="flex items-center gap-2 rounded p-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900">
+                <Dot color={attachmentOrigin(a).color} /> {a.originalName} <span className="text-xs text-zinc-500">{attachmentOrigin(a).label}</span>
               </Link>
             ))}
           </div>

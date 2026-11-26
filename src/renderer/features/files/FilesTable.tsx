@@ -6,6 +6,7 @@ import { Dot, EmptyState, Input, Select, useConfirm } from '../../components/ui'
 import { useApiQuery, useCall } from '../../lib/queries'
 import { formatBytes, formatDate } from '../../lib/format'
 import { allProjects } from '../week/TaskFilters'
+import { attachmentOrigin } from '../../lib/attachmentOrigin'
 
 type Kind = 'image' | 'pdf' | 'document' | 'other'
 type Item = ApiMethods['attachments.list']['output'][number]
@@ -82,10 +83,10 @@ export function FilesTable({ fixedProjectId }: { fixedProjectId?: number }) {
                 <td className="text-xs">
                   <button
                     className="flex items-center gap-1 hover:underline"
-                    onClick={() => nav(a.taskId ? `/projects/${a.projectId}?task=${a.taskId}` : `/projects/${a.projectId}`)}
+                    onClick={() => nav(attachmentOrigin(a).href)}
                   >
-                    <Dot color={a.companyColor} size={8} />
-                    {a.taskTitle ? `${a.taskTitle} › ` : ''}{a.projectName} › {a.companyName}
+                    <Dot color={attachmentOrigin(a).color} size={8} />
+                    {attachmentOrigin(a).label}
                   </button>
                 </td>
                 <td className="w-20">

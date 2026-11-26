@@ -1,16 +1,17 @@
-import type { Company, Project, TaskFilter, TaskListItem } from '@shared/types'
+import type { Company, Idea, Project, TaskFilter, TaskListItem } from '@shared/types'
 import type { AppContext } from '../context'
 import { camelAll } from '../lib/rows'
 import { buildTaskWhere, decorate, LIST_COLS } from './taskQuery'
 import { listAttachments, type AttachmentListItem } from './attachments'
 
-export type SearchType = 'task' | 'comment' | 'project' | 'company' | 'attachment'
+export type SearchType = 'task' | 'comment' | 'project' | 'company' | 'attachment' | 'idea'
 export type SearchResults = {
   tasks: (TaskListItem & { snippet: string })[]
   comments: { id: number; taskId: number; taskTitle: string; snippet: string; companyColor: string; projectName: string }[]
   projects: (Project & { companyName: string; companyColor: string })[]
   companies: Company[]
   attachments: AttachmentListItem[]
+  ideas: (Idea & { snippet: string })[]
 }
 
 /** Every word becomes a quoted prefix term; FTS syntax in user input is neutralized. */
@@ -26,10 +27,10 @@ export function search(
   ctx: AppContext,
   input: { text: string; types?: SearchType[]; filter?: TaskFilter & { createdFrom?: string; createdTo?: string }; limit?: number }
 ): SearchResults {
-  const empty: SearchResults = { tasks: [], comments: [], projects: [], companies: [], attachments: [] }
+  const empty: SearchResults = { tasks: [], comments: [], projects: [], companies: [], attachments: [], ideas: [] }
   const q = buildFtsQuery(input.text)
   if (!q) return empty
-  const types = new Set<SearchType>(input.types ?? ['task', 'comment', 'project', 'company', 'attachment'])
+  const types = new Set<SearchType>(input.types ?? ['task', 'comment', 'project', 'company', 'attachment', 'idea'])
   const limit = input.limit ?? 50
   let hits: Hit[]
   try {
@@ -112,6 +113,16 @@ export function search(
       out.attachments = listAttachments(ctx, { includeArchived: filter.includeArchived, companyId: filter.companyIds?.[0], projectId: filter.projectIds?.[0] })
         .filter((a) => hs.has(a.id))
         .slice(0, limit)
+    }
+  }
+  if (types.has('idea')) {
+    const hs = ids('idea')
+    if (hs.length) {
+      const rows = camelAll<Idea>(
+        ctx.db.prepare(`SELECT * FROM ideas WHERE id IN (${ph(hs.length)}) AND (? OR status <> 'archived')`).all(...hs.map((h) => h.entity_id), filter.includeArchived ? 1 : 0)
+      )
+      const byId = new Map(rows.map((r) => [r.id, r]))
+      out.ideas = hs.filter((h) => byId.has(h.entity_id)).slice(0, limit).map((h) => ({ ...byId.get(h.entity_id)!, snippet: h.snip }))
     }
   }
   return out

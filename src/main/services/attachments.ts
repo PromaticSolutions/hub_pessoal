@@ -71,21 +71,25 @@ function sanitize(name: string): string {
 export type AttachmentListItem = Attachment & {
   kind: AttachmentKind
   taskTitle: string | null
-  projectId: number
-  projectName: string
-  companyId: number
-  companyName: string
-  companyColor: string
+  ideaTitle: string | null
+  projectId: number | null
+  projectName: string | null
+  companyId: number | null
+  companyName: string | null
+  companyColor: string | null
 }
 
-export function addAttachments(ctx: AppContext, input: { taskId?: number; projectId?: number; sourcePaths: string[] }): Attachment[] {
-  if ((input.taskId == null) === (input.projectId == null)) throw new AppError('VALIDATION', 'Informe a tarefa ou o projeto do anexo.')
+export function addAttachments(
+  ctx: AppContext,
+  input: { taskId?: number; projectId?: number; ideaId?: number; sourcePaths: string[]; originalNames?: string[] }
+): Attachment[] {
+  if ([input.taskId, input.projectId, input.ideaId].filter((x) => x != null).length !== 1) throw new AppError('VALIDATION', 'Informe a tarefa, o projeto ou a ideia do anexo.')
   const now = ctx.now()
   const sub = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
   const out: Attachment[] = []
-  for (const src of input.sourcePaths) {
+  for (const [i, src] of input.sourcePaths.entries()) {
     if (!existsSync(src) || !statSync(src).isFile()) throw new AppError('NOT_FOUND', `Arquivo não encontrado: ${basename(src)}`)
-    const original = basename(src)
+    const original = input.originalNames?.[i] ?? basename(src)
     const rel = `${sub}/${randomUUID()}-${sanitize(original)}`
     const dest = join(paths(ctx).attachments, rel)
     mkdirSync(dirname(dest), { recursive: true })
@@ -96,8 +100,8 @@ export function addAttachments(ctx: AppContext, input: { taskId?: number; projec
     const ext = original.split('.').pop()?.toLowerCase() ?? ''
     const mime = MIME[ext] ?? 'application/octet-stream'
     const id = ctx.db
-      .prepare('INSERT INTO attachments(task_id, project_id, original_name, stored_path, mime_type, size_bytes) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(input.taskId ?? null, input.projectId ?? null, original, rel, mime, size).lastInsertRowid as number
+      .prepare('INSERT INTO attachments(task_id, project_id, idea_id, original_name, stored_path, mime_type, size_bytes) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(input.taskId ?? null, input.projectId ?? null, input.ideaId ?? null, original, rel, mime, size).lastInsertRowid as number
     if (input.taskId != null) logActivity(ctx.db, { entityType: 'task', entityId: input.taskId, taskId: input.taskId, action: 'attachment_added', newValue: original })
     out.push(getAttachment(ctx, id))
   }
@@ -119,23 +123,25 @@ export function getAttachmentAbsPath(ctx: AppContext, id: number): string {
 
 export function listAttachments(
   ctx: AppContext,
-  f: { companyId?: number; projectId?: number; taskId?: number; kind?: AttachmentKind; text?: string; includeArchived?: boolean }
+  f: { companyId?: number; projectId?: number; taskId?: number; ideaId?: number; kind?: AttachmentKind; text?: string; includeArchived?: boolean }
 ): AttachmentListItem[] {
   const where: string[] = []
   const params: unknown[] = []
   if (f.companyId) { where.push('co.id = ?'); params.push(f.companyId) }
   if (f.projectId) { where.push('p.id = ?'); params.push(f.projectId) }
   if (f.taskId) { where.push('a.task_id = ?'); params.push(f.taskId) }
+  if (f.ideaId) { where.push('a.idea_id = ?'); params.push(f.ideaId) }
   if (f.text?.trim()) { where.push('a.original_name LIKE ?'); params.push(`%${f.text.trim()}%`) }
-  if (!f.includeArchived) where.push("(t.id IS NULL OR t.archived_at IS NULL) AND (b.id IS NULL OR b.archived_at IS NULL) AND p.archived_at IS NULL AND co.status = 'active'")
+  if (!f.includeArchived) where.push("(t.id IS NULL OR t.archived_at IS NULL) AND (b.id IS NULL OR b.archived_at IS NULL) AND (p.id IS NULL OR p.archived_at IS NULL) AND (co.id IS NULL OR co.status = 'active')")
   const rows = ctx.db
     .prepare(
-      `SELECT a.*, t.title AS task_title, p.id AS project_id_r, p.name AS project_name, co.id AS company_id, co.name AS company_name, co.color AS company_color
+      `SELECT a.*, t.title AS task_title, i.title AS idea_title, p.id AS project_id_r, p.name AS project_name, co.id AS company_id, co.name AS company_name, co.color AS company_color
        FROM attachments a
        LEFT JOIN tasks t ON t.id = a.task_id
+       LEFT JOIN ideas i ON i.id = a.idea_id
        LEFT JOIN boards b ON b.id = t.board_id
-       JOIN projects p ON p.id = coalesce(a.project_id, b.project_id)
-       JOIN companies co ON co.id = p.company_id
+       LEFT JOIN projects p ON p.id = coalesce(a.project_id, b.project_id)
+       LEFT JOIN companies co ON co.id = p.company_id
        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
        ORDER BY a.created_at DESC, a.id DESC`
     )

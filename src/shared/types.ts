@@ -104,6 +104,7 @@ export type Attachment = {
   id: number
   taskId: number | null
   projectId: number | null
+  ideaId: number | null
   originalName: string
   storedPath: string
   mimeType: string
@@ -187,3 +188,21 @@ export type BulkAction =
   | { kind: 'archive' }
   | { kind: 'restore' }
   | { kind: 'delete' }
+
+export type IdeaStatus = 'new' | 'analysis' | 'developing' | 'implemented' | 'archived'
+
+export type Idea = {
+  id: number
+  title: string
+  description: string
+  category: string
+  priority: Priority
+  status: IdeaStatus
+  companyId: number | null
+  projectId: number | null
+  convertedTaskId: number | null
+  convertedProjectId: number | null
+  position: number
+  createdAt: string
+  updatedAt: string
+}

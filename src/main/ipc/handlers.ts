@@ -19,6 +19,7 @@ import * as taskQuery from '../services/taskQuery'
 import * as dashboard from '../services/dashboard'
 import * as bulk from '../services/bulk'
 import * as dayBlocks from '../services/dayBlocks'
+import * as ideas from '../services/ideas'
 import * as calendar from '../services/calendar'
 import * as searchSvc from '../services/search'
 import * as backup from '../services/backup'
@@ -51,6 +52,15 @@ export const taskFilter = z.object({
   text: z.string().optional(),
   createdFrom: z.string().optional(),
   createdTo: z.string().optional()
+})
+const ideaStatus = z.enum(['new', 'analysis', 'developing', 'implemented', 'archived'])
+const ideaFields = z.object({
+  description: z.string().optional(),
+  category: z.string().optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+  status: ideaStatus.optional(),
+  companyId: zid.nullable().optional(),
+  projectId: zid.nullable().optional()
 })
 const between = { beforeId: zid.nullable(), afterId: zid.nullable() }
 
@@ -150,9 +160,9 @@ export const handlers = {
   'checklistItems.move': h(z.object({ id: zid, checklistId: zid, ...between }), (c, i) => checklists.moveChecklistItem(c, i)),
   'checklistItems.delete': h(ID, (c, i) => checklists.deleteChecklistItem(c, i.id)),
   // attachments
-  'attachments.add': h(z.object({ taskId: zid.optional(), projectId: zid.optional(), sourcePaths: z.array(z.string()).min(1) }), (c, i) => attachments.addAttachments(c, i)),
+  'attachments.add': h(z.object({ taskId: zid.optional(), projectId: zid.optional(), ideaId: zid.optional(), sourcePaths: z.array(z.string()).min(1) }), (c, i) => attachments.addAttachments(c, i)),
   'attachments.list': h(
-    z.object({ companyId: zid.optional(), projectId: zid.optional(), taskId: zid.optional(), kind: z.enum(['image', 'pdf', 'document', 'other']).optional(), text: z.string().optional(), includeArchived: z.boolean().optional() }),
+    z.object({ companyId: zid.optional(), projectId: zid.optional(), taskId: zid.optional(), ideaId: zid.optional(), kind: z.enum(['image', 'pdf', 'document', 'other']).optional(), text: z.string().optional(), includeArchived: z.boolean().optional() }),
     (c, i) => attachments.listAttachments(c, i)
   ),
   'attachments.open': h(ID, async (c, i) => {
@@ -174,7 +184,7 @@ export const handlers = {
   'search.query': h(
     z.object({
       text: z.string(),
-      types: z.array(z.enum(['task', 'comment', 'project', 'company', 'attachment'])).optional(),
+      types: z.array(z.enum(['task', 'comment', 'project', 'company', 'attachment', 'idea'])).optional(),
       filter: taskFilter.optional(),
       limit: z.number().int().optional()
     }),
@@ -243,6 +253,19 @@ export const handlers = {
   'dayBlocks.setDone': h(z.object({ id: zid, done: z.boolean() }), (c, i) => dayBlocks.setBlockDone(c, i.id, i.done)),
   'dayBlocks.delete': h(ID, (c, i) => dayBlocks.deleteBlock(c, i.id)),
   'dayBlocks.copyFromDay': h(z.object({ from: z.string(), to: z.string() }), (c, i) => dayBlocks.copyFromDay(c, i)),
+  // ideias
+  'ideas.list': h(
+    z.object({ status: z.array(ideaStatus).optional(), category: z.string().optional(), priority: priority.optional(), companyId: zid.optional(), labelId: zid.optional(), text: z.string().optional() }),
+    (c, i) => ideas.listIdeas(c, i)
+  ),
+  'ideas.categories': h(z.object({}), (c) => ideas.listIdeaCategories(c)),
+  'ideas.get': h(ID, (c, i) => ideas.getIdea(c, i.id)),
+  'ideas.create': h(ideaFields.extend({ title: z.string() }), (c, i) => ideas.createIdea(c, i)),
+  'ideas.update': h(ideaFields.extend({ id: zid, title: z.string().optional() }), (c, { id, ...p }) => ideas.updateIdea(c, id, p)),
+  'ideas.setLabels': h(z.object({ id: zid, labelIds: z.array(zid) }), (c, i) => ideas.setIdeaLabels(c, i.id, i.labelIds)),
+  'ideas.delete': h(ID, (c, i) => ideas.deleteIdea(c, i.id)),
+  'ideas.toTask': h(z.object({ id: zid, projectId: zid }), (c, i) => ideas.convertIdeaToTask(c, i)),
+  'ideas.toProject': h(z.object({ id: zid, companyId: zid, folderId: zid.nullable() }), (c, i) => ideas.convertIdeaToProject(c, i)),
   // @@end
 } satisfies Record<string, Handler>
 

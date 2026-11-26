@@ -29,6 +29,15 @@ export const SPACE_COLORS = [
   '#F97316', '#EF4444', '#EC4899', '#8B5CF6', '#64748B'
 ]
 
+export const IDEA_STATUSES = ['new', 'analysis', 'developing', 'implemented', 'archived'] as const
+export const IDEA_STATUS_LABELS: Record<(typeof IDEA_STATUSES)[number], string> = {
+  new: 'Nova ideia',
+  analysis: 'Em análise',
+  developing: 'Em desenvolvimento',
+  implemented: 'Implementada',
+  archived: 'Arquivada'
+}
+
 export const SOFT_COLORS = [
   '#64748B', '#6366F1', '#0EA5E9', '#14B8A6', '#10B981', '#84CC16',
   '#EAB308', '#F59E0B', '#F97316', '#EF4444', '#EC4899', '#A855F7'
