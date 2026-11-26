@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { AppError } from '../lib/errors'
 
 const CACHE_MS = 60_000
@@ -39,6 +40,24 @@ export function createSupabaseAuth(opts: { url: string; anonKey: string; allowed
         throw new AppError('UNAVAILABLE', `Supabase auth indisponível (${status || 'rede'}).`)
       }
       return data.user ? { email: data.user.email ?? null } : null
+    }
+  }
+  // Fast path: verify the token locally against the project's JWKS (ES256), no network per request.
+  // Falls back to getUser when the project signs with a legacy shared secret or the JWKS is unreachable.
+  const viaApi = getUser
+  if (!opts.getUser) {
+    const jwks = createRemoteJWKSet(new URL(`${opts.url.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json`), { cacheMaxAge: 10 * 60_000 })
+    const issuer = `${opts.url.replace(/\/$/, '')}/auth/v1`
+    getUser = async (token) => {
+      try {
+        const { payload } = await jwtVerify(token, jwks, { issuer, audience: 'authenticated' })
+        return { email: typeof payload.email === 'string' ? payload.email : null }
+      } catch (e) {
+        const code = (e as { code?: string }).code ?? ''
+        // Expired / bad signature / wrong claims → logged out. Key lookup problems → ask Supabase.
+        if (code.startsWith('ERR_JWT') || code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') return null
+        return viaApi!(token)
+      }
     }
   }
   const cache = new Map<string, { email: string; until: number }>()

@@ -15,11 +15,10 @@ export const UNAUTHORIZED_MESSAGE = 'Sessão expirada. Entre novamente.'
 export const UNAVAILABLE_MESSAGE = 'Servidor de login indisponível. Tente de novo.'
 const MAX_BODY_BYTES = 4 * 1024 * 1024
 
-function json(body: Envelope, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
-  })
+function json(body: Envelope, status = 200, timing?: string): Response {
+  const headers: Record<string, string> = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
+  if (timing) headers['server-timing'] = timing
+  return new Response(JSON.stringify(body), { status, headers })
 }
 
 const fail = (code: string, message: string, status = 200) => json({ ok: false, error: { code, message } }, status)
@@ -27,6 +26,7 @@ const fail = (code: string, message: string, status = 200) => json({ ok: false, 
 /** POST /api/rpc `{ method, input }` → Envelope. Auth failure → 401 UNAUTHORIZED. */
 export async function handleRpc(req: Request, deps: RpcDeps): Promise<Response> {
   if (req.method !== 'POST') return fail('VALIDATION', 'Use POST.', 405)
+  const t0 = Date.now()
   try {
     await deps.auth(req)
   } catch (e) {
@@ -51,5 +51,7 @@ export async function handleRpc(req: Request, deps: RpcDeps): Promise<Response> 
     logError('context', e)
     return fail('INTERNAL', 'Servidor indisponível. Tente novamente.', 500)
   }
-  return json(await dispatch(deps.handlers ?? handlers, ctx, body.method, body.input))
+  const t1 = Date.now()
+  const result = await dispatch(deps.handlers ?? handlers, ctx, body.method, body.input)
+  return json(result, 200, `auth;dur=${t1 - t0}, app;dur=${Date.now() - t1}`)
 }
