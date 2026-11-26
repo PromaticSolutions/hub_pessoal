@@ -38,6 +38,8 @@ export function buildTaskWhere(ctx: AppContext, f: TaskFilter): { where: string;
   if (f.noDueOnly) w.push('t.due_at IS NULL')
   if (f.includeDone === false) w.push("t.status <> 'done'")
   if (f.text?.trim()) { w.push('t.title LIKE ?'); p.push(`%${f.text.trim()}%`) }
+  if (f.createdFrom) { w.push("date(t.created_at, 'localtime') >= ?"); p.push(f.createdFrom) }
+  if (f.createdTo) { w.push("date(t.created_at, 'localtime') <= ?"); p.push(f.createdTo) }
   return { where: w.length ? w.join(' AND ') : '1', params: p }
 }
 
@@ -62,7 +64,8 @@ export function queryTasks(ctx: AppContext, input: { filter: TaskFilter; sort: T
     due: `t.due_at IS NULL, t.due_end, ${PRIO_SQL}, t.id`,
     priority: `${PRIO_SQL}, t.due_at IS NULL, t.due_end, t.id`,
     created: 't.created_at DESC, t.id DESC',
-    updated: 't.updated_at DESC, t.id DESC'
+    updated: 't.updated_at DESC, t.id DESC',
+    status: `CASE t.status WHEN 'todo' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, t.due_at IS NULL, t.due_end, ${PRIO_SQL}, t.id`
   }[input.sort]
   const rows = ctx.db
     .prepare(`SELECT ${LIST_COLS} FROM v_tasks t WHERE ${where} ORDER BY ${order} ${input.limit ? `LIMIT ${Number(input.limit)}` : ''}`)

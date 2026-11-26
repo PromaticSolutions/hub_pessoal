@@ -45,11 +45,8 @@ export function search(
   const ids = (t: SearchType) => hits.filter((h) => h.entity_type === t)
   const filter = input.filter ?? {}
   const { where, params } = buildTaskWhere(ctx, filter)
-  const created: string[] = []
   const cparams: unknown[] = []
-  if (filter.createdFrom) { created.push("date(t.created_at, 'localtime') >= ?"); cparams.push(filter.createdFrom) }
-  if (filter.createdTo) { created.push("date(t.created_at, 'localtime') <= ?"); cparams.push(filter.createdTo) }
-  const taskWhere = [where, ...created].join(' AND ')
+  const taskWhere = where
   const out: SearchResults = { ...empty }
 
   const ph = (n: number) => Array.from({ length: n }, () => '?').join(',')

@@ -17,6 +17,7 @@ import * as checklists from '../services/checklists'
 import * as attachments from '../services/attachments'
 import * as taskQuery from '../services/taskQuery'
 import * as dashboard from '../services/dashboard'
+import * as bulk from '../services/bulk'
 import * as calendar from '../services/calendar'
 import * as searchSvc from '../services/search'
 import * as backup from '../services/backup'
@@ -46,7 +47,9 @@ export const taskFilter = z.object({
   noDueOnly: z.boolean().optional(),
   includeDone: z.boolean().optional(),
   includeArchived: z.boolean().optional(),
-  text: z.string().optional()
+  text: z.string().optional(),
+  createdFrom: z.string().optional(),
+  createdTo: z.string().optional()
 })
 const between = { beforeId: zid.nullable(), afterId: zid.nullable() }
 
@@ -159,7 +162,7 @@ export const handlers = {
   'attachments.delete': h(ID, (c, i) => attachments.deleteAttachment(c, i.id)),
   'attachments.thumbnail': h(ID, (c, i) => attachments.getAttachmentDataUrl(c, i.id)),
   // task query
-  'tasks.query': h(z.object({ filter: taskFilter, sort: z.enum(['due', 'priority', 'created', 'updated']), limit: z.number().int().optional() }), (c, i) => taskQuery.queryTasks(c, i)),
+  'tasks.query': h(z.object({ filter: taskFilter, sort: z.enum(['due', 'priority', 'created', 'updated', 'status']), limit: z.number().int().optional() }), (c, i) => taskQuery.queryTasks(c, i)),
   'tasks.quickCreate': h(z.object({ projectId: zid, title: z.string(), dueAt: nullableStr, priority: priority.optional() }), (c, i) => taskQuery.quickCreateTask(c, i)),
   // dashboard
   'dashboard.get': h(
@@ -171,7 +174,7 @@ export const handlers = {
     z.object({
       text: z.string(),
       types: z.array(z.enum(['task', 'comment', 'project', 'company', 'attachment'])).optional(),
-      filter: taskFilter.extend({ createdFrom: z.string().optional(), createdTo: z.string().optional() }).optional(),
+      filter: taskFilter.optional(),
       limit: z.number().int().optional()
     }),
     (c, i) => searchSvc.search(c, i)
@@ -210,6 +213,21 @@ export const handlers = {
     if (!/^(https?:\/\/|mailto:)/i.test(i.url)) throw new AppError('VALIDATION', 'Só links http(s) e mailto podem ser abertos.')
     await sys.openExternal(i.url)
   }),
+  'tasks.bulk': h(
+    z.object({
+      ids: z.array(zid).min(1),
+      action: z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('status'), status: category }),
+        z.object({ kind: z.literal('priority'), priority }),
+        z.object({ kind: z.literal('due'), dueAt: z.string().nullable() }),
+        z.object({ kind: z.literal('move'), projectId: zid }),
+        z.object({ kind: z.literal('archive') }),
+        z.object({ kind: z.literal('restore') }),
+        z.object({ kind: z.literal('delete') })
+      ])
+    }),
+    (c, i) => bulk.bulkUpdate(c, i)
+  ),
   // @@end
 } satisfies Record<string, Handler>
 

@@ -168,6 +168,17 @@ export type TaskFilter = {
   includeDone?: boolean
   includeArchived?: boolean
   text?: string
+  createdFrom?: string
+  createdTo?: string
 }
 
-export type TaskSort = 'due' | 'priority' | 'created' | 'updated'
+export type TaskSort = 'due' | 'priority' | 'created' | 'updated' | 'status'
+
+export type BulkAction =
+  | { kind: 'status'; status: ColumnCategory }
+  | { kind: 'priority'; priority: Priority }
+  | { kind: 'due'; dueAt: string | null }
+  | { kind: 'move'; projectId: number }
+  | { kind: 'archive' }
+  | { kind: 'restore' }
+  | { kind: 'delete' }
