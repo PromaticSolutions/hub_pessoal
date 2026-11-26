@@ -11,18 +11,13 @@ export const CARD_COLS = `t.id, t.board_id, t.column_id, t.title, t.priority, t.
   (SELECT count(*) FROM comments m WHERE m.task_id = t.id) AS comment_count,
   (SELECT count(*) FROM attachments a WHERE a.task_id = t.id) AS attachment_count`
 
-export function labelsFor(ctx: AppContext, taskIds: number[]): Map<number, Label[]> {
+export async function labelsFor(ctx: AppContext, taskIds: number[]): Promise<Map<number, Label[]>> {
   const map = new Map<number, Label[]>()
   if (!taskIds.length) return map
-  const rows: { task_id: number; id: number; name: string; color: string }[] = []
-  for (let i = 0; i < taskIds.length; i += 500) {
-    const chunk = taskIds.slice(i, i + 500)
-    rows.push(
-      ...(ctx.db
-        .prepare(`SELECT tl.task_id, l.id, l.name, l.color FROM task_labels tl JOIN labels l ON l.id = tl.label_id WHERE tl.task_id IN (${chunk.map(() => '?').join(',')}) ORDER BY l.name`)
-        .all(...chunk) as typeof rows)
-    )
-  }
+  const rows = await ctx.db.many<{ task_id: number; id: number; name: string; color: string }>(
+    'SELECT tl.task_id, l.id, l.name, l.color FROM task_labels tl JOIN labels l ON l.id = tl.label_id WHERE tl.task_id = ANY(?) ORDER BY l.name COLLATE "C"',
+    [taskIds]
+  )
   for (const r of rows) {
     const list = map.get(r.task_id) ?? []
     list.push({ id: r.id, name: r.name, color: r.color })
@@ -31,10 +26,10 @@ export function labelsFor(ctx: AppContext, taskIds: number[]): Map<number, Label
   return map
 }
 
-export function toCards<T extends CardSummary>(ctx: AppContext, rows: Record<string, unknown>[]): T[] {
+export async function toCards<T extends CardSummary>(ctx: AppContext, rows: Record<string, unknown>[]): Promise<T[]> {
   const now = ctx.now()
   const items = rows.map((r) => camel<T>(r))
-  const labels = labelsFor(ctx, items.map((c) => c.id))
+  const labels = await labelsFor(ctx, items.map((c) => c.id))
   for (const c of items) {
     c.labels = labels.get(c.id) ?? []
     c.isOverdue = isOverdue(c.dueAt, c.status, now)

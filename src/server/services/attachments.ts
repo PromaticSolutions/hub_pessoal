@@ -1,42 +1,36 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, utimesSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
-import { randomUUID } from 'node:crypto'
-import type Database from 'better-sqlite3'
 import type { Attachment } from '@shared/types'
-import type { DataPaths } from '../paths'
+import type { Db } from '../db/db'
+import type { Storage } from '../storage/storage'
 import type { AppContext } from '../context'
 import { AppError } from '../lib/errors'
 import { camel, must } from '../lib/rows'
-import { logActivity } from '../lib/activity'
 
-/** Moves a stored attachment file to attachments-deleted/ (kept 30 days). Missing files are ignored. */
-export function moveToDeleted(paths: DataPaths, relPath: string): void {
-  const src = join(paths.attachments, relPath)
-  if (!existsSync(src)) return
-  const dest = join(paths.attachmentsDeleted, relPath)
-  mkdirSync(dirname(dest), { recursive: true })
-  renameSync(src, dest)
-  const now = new Date()
-  utimesSync(dest, now, now)
+/** Moves a stored attachment file (`attachments/<rel>`) to `deleted/<rel>` in Storage. Missing files are ignored. */
+export async function moveToDeleted(storage: Storage, relPath: string): Promise<void> {
+  try {
+    await storage.move(`attachments/${relPath}`, `deleted/${relPath}`)
+  } catch (e) {
+    if (e instanceof AppError && e.code === 'NOT_FOUND') return
+    throw e
+  }
 }
 
 /** Stored paths of attachments matching a WHERE over `attachments a` joined to tasks/boards/projects. */
-export function collectAttachmentPaths(db: Database.Database, where: string, params: unknown[]): string[] {
-  const rows = db
-    .prepare(
-      `SELECT a.stored_path FROM attachments a
-       LEFT JOIN tasks t ON t.id = a.task_id
-       LEFT JOIN boards b ON b.id = t.board_id
-       LEFT JOIN projects p ON p.id = coalesce(a.project_id, b.project_id)
-       WHERE ${where}`
-    )
-    .all(...params) as { stored_path: string }[]
+export async function collectAttachmentPaths(db: Db, where: string, params: unknown[]): Promise<string[]> {
+  const rows = await db.many<{ stored_path: string }>(
+    `SELECT a.stored_path FROM attachments a
+     LEFT JOIN tasks t ON t.id = a.task_id
+     LEFT JOIN boards b ON b.id = t.board_id
+     LEFT JOIN projects p ON p.id = coalesce(a.project_id, b.project_id)
+     WHERE ${where}`,
+    params
+  )
   return rows.map((r) => r.stored_path)
 }
 
 /* ---------- storage & queries ---------- */
 
-const MIME: Record<string, string> = {
+export const MIME: Record<string, string> = {
   pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
   bmp: 'image/bmp', txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json', zip: 'application/zip',
   doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -57,7 +51,7 @@ export function kindOf(name: string, mime: string): AttachmentKind {
   return 'other'
 }
 
-function sanitize(name: string): string {
+export function sanitize(name: string): string {
   // eslint-disable-next-line no-control-regex
   let n = name.replace(/[/\\\x00-\x1f]/g, '_').trim() || 'arquivo'
   if (n.length > 120) {
@@ -79,62 +73,19 @@ export type AttachmentListItem = Attachment & {
   companyColor: string | null
 }
 
-export function addAttachments(
-  ctx: AppContext,
-  input: { taskId?: number; projectId?: number; ideaId?: number; sourcePaths: string[]; originalNames?: string[] }
-): Attachment[] {
-  if ([input.taskId, input.projectId, input.ideaId].filter((x) => x != null).length !== 1) throw new AppError('VALIDATION', 'Informe a tarefa, o projeto ou a ideia do anexo.')
-  const now = ctx.now()
-  const sub = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
-  const out: Attachment[] = []
-  for (const [i, src] of input.sourcePaths.entries()) {
-    if (!existsSync(src) || !statSync(src).isFile()) throw new AppError('NOT_FOUND', `Arquivo não encontrado: ${basename(src)}`)
-    const original = input.originalNames?.[i] ?? basename(src)
-    const rel = `${sub}/${randomUUID()}-${sanitize(original)}`
-    const dest = join(paths(ctx).attachments, rel)
-    mkdirSync(dirname(dest), { recursive: true })
-    const tmp = `${dest}.part`
-    copyFileSync(src, tmp)
-    renameSync(tmp, dest)
-    const size = statSync(dest).size
-    const ext = original.split('.').pop()?.toLowerCase() ?? ''
-    const mime = MIME[ext] ?? 'application/octet-stream'
-    const id = ctx.db
-      .prepare('INSERT INTO attachments(task_id, project_id, idea_id, original_name, stored_path, mime_type, size_bytes) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(input.taskId ?? null, input.projectId ?? null, input.ideaId ?? null, original, rel, mime, size).lastInsertRowid as number
-    if (input.taskId != null) logActivity(ctx.db, { entityType: 'task', entityId: input.taskId, taskId: input.taskId, action: 'attachment_added', newValue: original })
-    out.push(getAttachment(ctx, id))
-  }
-  return out
-}
-
-const paths = (ctx: AppContext) => ctx.paths
-
-export function getAttachment(ctx: AppContext, id: number): Attachment {
-  return camel<Attachment>(must(ctx.db.prepare('SELECT * FROM attachments WHERE id = ?').get(id) as Record<string, unknown>, 'Anexo'))
-}
-
-export function getAttachmentAbsPath(ctx: AppContext, id: number): string {
-  const a = getAttachment(ctx, id)
-  const abs = join(ctx.paths.attachments, a.storedPath)
-  if (!existsSync(abs)) throw new AppError('NOT_FOUND', 'Arquivo indisponível.')
-  return abs
-}
-
-export function listAttachments(
+export async function listAttachments(
   ctx: AppContext,
   f: { companyId?: number; projectId?: number; taskId?: number; ideaId?: number; kind?: AttachmentKind; text?: string; includeArchived?: boolean }
-): AttachmentListItem[] {
+): Promise<AttachmentListItem[]> {
   const where: string[] = []
   const params: unknown[] = []
   if (f.companyId) { where.push('co.id = ?'); params.push(f.companyId) }
   if (f.projectId) { where.push('p.id = ?'); params.push(f.projectId) }
   if (f.taskId) { where.push('a.task_id = ?'); params.push(f.taskId) }
   if (f.ideaId) { where.push('a.idea_id = ?'); params.push(f.ideaId) }
-  if (f.text?.trim()) { where.push('a.original_name LIKE ?'); params.push(`%${f.text.trim()}%`) }
+  if (f.text?.trim()) { where.push('a.original_name ILIKE ?'); params.push(`%${f.text.trim()}%`) }
   if (!f.includeArchived) where.push("(t.id IS NULL OR t.archived_at IS NULL) AND (b.id IS NULL OR b.archived_at IS NULL) AND (p.id IS NULL OR p.archived_at IS NULL) AND (co.id IS NULL OR co.status = 'active')")
-  const rows = ctx.db
-    .prepare(
+  const rows = await ctx.db.many<Record<string, unknown>>(
       `SELECT a.*, t.title AS task_title, i.title AS idea_title, p.id AS project_id_r, p.name AS project_name, co.id AS company_id, co.name AS company_name, co.color AS company_color
        FROM attachments a
        LEFT JOIN tasks t ON t.id = a.task_id
@@ -143,9 +94,9 @@ export function listAttachments(
        LEFT JOIN projects p ON p.id = coalesce(a.project_id, b.project_id)
        LEFT JOIN companies co ON co.id = p.company_id
        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-       ORDER BY a.created_at DESC, a.id DESC`
-    )
-    .all(...params) as Record<string, unknown>[]
+       ORDER BY a.created_at DESC, a.id DESC`,
+    params
+  )
   const items = rows.map((r) => {
     const x = camel<AttachmentListItem & { projectIdR: number }>(r)
     const item = { ...x, projectId: x.projectIdR, kind: kindOf(x.originalName, x.mimeType) } as AttachmentListItem & { projectIdR?: number }
@@ -155,34 +106,34 @@ export function listAttachments(
   return f.kind ? items.filter((i) => i.kind === f.kind) : items
 }
 
-export function deleteAttachment(ctx: AppContext, id: number): void {
-  const a = getAttachment(ctx, id)
-  ctx.db.prepare('DELETE FROM attachments WHERE id = ?').run(id)
-  if (a.taskId != null) logActivity(ctx.db, { entityType: 'task', entityId: a.taskId, taskId: a.taskId, action: 'attachment_removed', oldValue: a.originalName })
-  moveToDeleted(ctx.paths, a.storedPath)
+export async function getAttachment(ctx: AppContext, id: number): Promise<Attachment> {
+  return camel<Attachment>(must(await ctx.db.one('SELECT * FROM attachments WHERE id = ?', [id]), 'Anexo'))
 }
 
-export function getAttachmentDataUrl(ctx: AppContext, id: number, maxBytes = 5_000_000): string | null {
-  const a = getAttachment(ctx, id)
-  if (!a.mimeType.startsWith('image/') || a.sizeBytes > maxBytes) return null
-  const abs = join(ctx.paths.attachments, a.storedPath)
-  if (!existsSync(abs)) return null
-  return `data:${a.mimeType};base64,${readFileSync(abs).toString('base64')}`
+const pending = (): never => {
+  throw new AppError('INTERNAL', 'pendente')
 }
 
-/** Brings back files referenced by the DB that only exist in attachments-deleted/ (after a restore). */
-export function restoreMissingAttachments(p: DataPaths, db: Database.Database): { restored: number; missing: number } {
-  let restored = 0
-  let missing = 0
-  for (const { stored_path } of db.prepare('SELECT stored_path FROM attachments').all() as { stored_path: string }[]) {
-    const live = join(p.attachments, stored_path)
-    if (existsSync(live)) continue
-    const del = join(p.attachmentsDeleted, stored_path)
-    if (existsSync(del)) {
-      mkdirSync(dirname(live), { recursive: true })
-      renameSync(del, live)
-      restored++
-    } else missing++
-  }
-  return { restored, missing }
+// Task 5: file storage functions below are ported with the Storage API.
+export async function addAttachments(
+  _ctx: AppContext,
+  _input: { taskId?: number; projectId?: number; ideaId?: number; sourcePaths: string[]; originalNames?: string[] }
+): Promise<Attachment[]> {
+  return pending()
+}
+
+export async function getAttachmentAbsPath(_ctx: AppContext, _id: number): Promise<string> {
+  return pending()
+}
+
+export async function deleteAttachment(_ctx: AppContext, _id: number): Promise<void> {
+  return pending()
+}
+
+export async function getAttachmentDataUrl(_ctx: AppContext, _id: number, _maxBytes = 5_000_000): Promise<string | null> {
+  return pending()
+}
+
+export async function restoreMissingAttachments(_storage: Storage, _db: Db): Promise<{ restored: number; missing: number }> {
+  return pending()
 }

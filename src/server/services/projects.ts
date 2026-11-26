@@ -1,8 +1,9 @@
 import type { Board, Company, Folder, Project, ProjectStatus } from '@shared/types'
 import { toLocalMinute } from '@shared/dates'
 import type { AppContext } from '../context'
+import { withTx } from '../db/tx'
 import { AppError } from '../lib/errors'
-import { camel, camelAll, must, requireName } from '../lib/rows'
+import { camel, camelAll, insertId, must, requireName } from '../lib/rows'
 import { positionForInsert } from '../lib/position'
 import { logActivity } from '../lib/activity'
 import { getCompany } from './companies'
@@ -10,34 +11,33 @@ import { assertFolderInSpace } from './folders'
 import { createBoard, listBoards } from './boards'
 import { collectAttachmentPaths, moveToDeleted } from './attachments'
 
-const TS = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
+const SCOPE = 'company_id = ? AND folder_id IS NOT DISTINCT FROM ?'
 
 export type ProjectDetail = Project & { company: Company; boards: Board[]; taskCounts: { total: number; done: number; overdue: number } }
 export type FolderNode = Folder & { children: FolderNode[]; projects: Project[] }
 export type SpaceTree = { company: Company; folders: FolderNode[]; projects: Project[] }[]
 
-export function getProjectRow(ctx: AppContext, id: number): Project {
-  return camel<Project>(must(ctx.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as Record<string, unknown>, 'Projeto'))
+export async function getProjectRow(ctx: AppContext, id: number): Promise<Project> {
+  return camel<Project>(must(await ctx.db.one('SELECT * FROM projects WHERE id = ?', [id]), 'Projeto'))
 }
 
-export function getProject(ctx: AppContext, id: number): ProjectDetail {
-  const p = getProjectRow(ctx, id)
-  const counts = ctx.db
-    .prepare(
-      `SELECT count(*) total,
-         coalesce(sum(status = 'done'), 0) done,
-         coalesce(sum(status <> 'done' AND due_end < ?), 0) overdue
-       FROM v_tasks WHERE project_id = ? AND archived_at IS NULL`
-    )
-    .get(toLocalMinute(ctx.now()), id) as { total: number; done: number; overdue: number }
-  return { ...p, company: getCompany(ctx, p.companyId), boards: listBoards(ctx, { projectId: id }), taskCounts: counts }
+export async function getProject(ctx: AppContext, id: number): Promise<ProjectDetail> {
+  const p = await getProjectRow(ctx, id)
+  const counts = (await ctx.db.one<{ total: number; done: number; overdue: number }>(
+    `SELECT count(*) total,
+       count(*) FILTER (WHERE status = 'done') done,
+       count(*) FILTER (WHERE status <> 'done' AND due_end < ?) overdue
+     FROM v_tasks WHERE project_id = ? AND archived_at IS NULL`,
+    [toLocalMinute(ctx.now()), id]
+  ))!
+  return { ...p, company: await getCompany(ctx, p.companyId), boards: await listBoards(ctx, { projectId: id }), taskCounts: counts }
 }
 
 function checkDates(start: string | null | undefined, due: string | null | undefined) {
   if (start && due && start.slice(0, 10) > due.slice(0, 10)) throw new AppError('VALIDATION', 'A data de início é depois do prazo final.')
 }
 
-export function createProject(
+export async function createProject(
   ctx: AppContext,
   input: {
     companyId: number
@@ -49,29 +49,30 @@ export function createProject(
     dueDate?: string | null
     status?: ProjectStatus
   }
-): Project {
+): Promise<Project> {
   const name = requireName(input.name)
-  getCompany(ctx, input.companyId)
-  assertFolderInSpace(ctx, input.folderId, input.companyId)
+  await getCompany(ctx, input.companyId)
+  await assertFolderInSpace(ctx, input.folderId, input.companyId)
   checkDates(input.startDate, input.dueDate)
-  return ctx.db.transaction(() => {
-    const pos = positionForInsert(ctx.db, 'projects', 'company_id = ? AND folder_id IS ?', [input.companyId, input.folderId], null, null)
-    const id = ctx.db
-      .prepare('INSERT INTO projects(company_id, folder_id, name, description, color, start_date, due_date, status, position) VALUES (?,?,?,?,?,?,?,?,?)')
-      .run(input.companyId, input.folderId, name, input.description ?? '', input.color, input.startDate ?? null, input.dueDate ?? null, input.status ?? 'active', pos)
-      .lastInsertRowid as number
-    createBoard(ctx, { projectId: id, name: 'Quadro principal' })
-    logActivity(ctx.db, { entityType: 'project', entityId: id, action: 'created' })
-    return getProjectRow(ctx, id)
-  })()
+  return withTx(ctx, async (tx) => {
+    const pos = await positionForInsert(tx.db, 'projects', SCOPE, [input.companyId, input.folderId], null, null)
+    const id = await insertId(
+      tx.db,
+      'INSERT INTO projects(company_id, folder_id, name, description, color, start_date, due_date, status, position) VALUES (?,?,?,?,?,?,?,?,?)',
+      [input.companyId, input.folderId, name, input.description ?? '', input.color, input.startDate ?? null, input.dueDate ?? null, input.status ?? 'active', pos]
+    )
+    await createBoard(tx, { projectId: id, name: 'Quadro principal' })
+    await logActivity(tx.db, { entityType: 'project', entityId: id, action: 'created' })
+    return getProjectRow(tx, id)
+  })
 }
 
-export function updateProject(
+export async function updateProject(
   ctx: AppContext,
   id: number,
   patch: Partial<{ name: string; description: string; color: string; startDate: string | null; dueDate: string | null; status: ProjectStatus }>
-): Project {
-  const cur = getProjectRow(ctx, id)
+): Promise<Project> {
+  const cur = await getProjectRow(ctx, id)
   const next = {
     name: patch.name !== undefined ? requireName(patch.name) : cur.name,
     description: patch.description ?? cur.description,
@@ -81,71 +82,77 @@ export function updateProject(
     status: patch.status ?? cur.status
   }
   checkDates(next.startDate, next.dueDate)
-  ctx.db
-    .prepare(`UPDATE projects SET name=?, description=?, color=?, start_date=?, due_date=?, status=?, updated_at=${TS} WHERE id=?`)
-    .run(next.name, next.description, next.color, next.startDate, next.dueDate, next.status, id)
+  await ctx.db.run('UPDATE projects SET name=?, description=?, color=?, start_date=?, due_date=?, status=?, updated_at=iso_now() WHERE id=?', [
+    next.name,
+    next.description,
+    next.color,
+    next.startDate,
+    next.dueDate,
+    next.status,
+    id
+  ])
   for (const k of Object.keys(next) as (keyof typeof next)[]) {
-    if (next[k] !== cur[k]) logActivity(ctx.db, { entityType: 'project', entityId: id, action: 'updated', field: k, oldValue: cur[k], newValue: next[k] })
+    if (next[k] !== cur[k]) await logActivity(ctx.db, { entityType: 'project', entityId: id, action: 'updated', field: k, oldValue: cur[k], newValue: next[k] })
   }
   return getProjectRow(ctx, id)
 }
 
-export function moveProject(
+export async function moveProject(
   ctx: AppContext,
   input: { id: number; companyId: number; folderId: number | null; beforeId: number | null; afterId: number | null }
-): Project {
-  const cur = getProjectRow(ctx, input.id)
-  getCompany(ctx, input.companyId)
-  assertFolderInSpace(ctx, input.folderId, input.companyId)
-  const pos = positionForInsert(ctx.db, 'projects', 'company_id = ? AND folder_id IS ?', [input.companyId, input.folderId], input.beforeId, input.afterId)
-  ctx.db.prepare(`UPDATE projects SET company_id=?, folder_id=?, position=?, updated_at=${TS} WHERE id=?`).run(input.companyId, input.folderId, pos, input.id)
+): Promise<Project> {
+  const cur = await getProjectRow(ctx, input.id)
+  await getCompany(ctx, input.companyId)
+  await assertFolderInSpace(ctx, input.folderId, input.companyId)
+  const pos = await positionForInsert(ctx.db, 'projects', SCOPE, [input.companyId, input.folderId], input.beforeId, input.afterId)
+  await ctx.db.run('UPDATE projects SET company_id=?, folder_id=?, position=?, updated_at=iso_now() WHERE id=?', [input.companyId, input.folderId, pos, input.id])
   if (cur.companyId !== input.companyId) {
-    logActivity(ctx.db, { entityType: 'project', entityId: input.id, action: 'moved', field: 'company', oldValue: cur.companyId, newValue: input.companyId })
+    await logActivity(ctx.db, { entityType: 'project', entityId: input.id, action: 'moved', field: 'company', oldValue: cur.companyId, newValue: input.companyId })
   }
   return getProjectRow(ctx, input.id)
 }
 
-export function archiveProject(ctx: AppContext, id: number): Project {
-  getProjectRow(ctx, id)
-  ctx.db.prepare(`UPDATE projects SET archived_at = ${TS} WHERE id = ?`).run(id)
-  logActivity(ctx.db, { entityType: 'project', entityId: id, action: 'archived' })
+export async function archiveProject(ctx: AppContext, id: number): Promise<Project> {
+  await getProjectRow(ctx, id)
+  await ctx.db.run('UPDATE projects SET archived_at = iso_now() WHERE id = ?', [id])
+  await logActivity(ctx.db, { entityType: 'project', entityId: id, action: 'archived' })
   return getProjectRow(ctx, id)
 }
 
-export function restoreProject(ctx: AppContext, id: number): Project {
-  getProjectRow(ctx, id)
-  ctx.db.prepare('UPDATE projects SET archived_at = NULL WHERE id = ?').run(id)
-  logActivity(ctx.db, { entityType: 'project', entityId: id, action: 'restored' })
+export async function restoreProject(ctx: AppContext, id: number): Promise<Project> {
+  await getProjectRow(ctx, id)
+  await ctx.db.run('UPDATE projects SET archived_at = NULL WHERE id = ?', [id])
+  await logActivity(ctx.db, { entityType: 'project', entityId: id, action: 'restored' })
   return getProjectRow(ctx, id)
 }
 
-export function getProjectDeletionImpact(ctx: AppContext, id: number): { boards: number; tasks: number; attachments: number } {
-  getProjectRow(ctx, id)
-  const one = (sql: string) => (ctx.db.prepare(sql).get(id) as { n: number }).n
+export async function getProjectDeletionImpact(ctx: AppContext, id: number): Promise<{ boards: number; tasks: number; attachments: number }> {
+  await getProjectRow(ctx, id)
+  const one = async (sql: string) => (await ctx.db.one<{ n: number }>(sql, [id]))!.n
   return {
-    boards: one('SELECT count(*) n FROM boards WHERE project_id = ?'),
-    tasks: one('SELECT count(*) n FROM v_tasks WHERE project_id = ?'),
-    attachments: collectAttachmentPaths(ctx.db, 'p.id = ?', [id]).length
+    boards: await one('SELECT count(*) n FROM boards WHERE project_id = ?'),
+    tasks: await one('SELECT count(*) n FROM v_tasks WHERE project_id = ?'),
+    attachments: (await collectAttachmentPaths(ctx.db, 'p.id = ?', [id])).length
   }
 }
 
-export function deleteProject(ctx: AppContext, id: number): void {
-  const p = getProjectRow(ctx, id)
-  const files = collectAttachmentPaths(ctx.db, 'p.id = ?', [id])
-  ctx.db.transaction(() => {
-    ctx.db.prepare('DELETE FROM projects WHERE id = ?').run(id)
-    logActivity(ctx.db, { entityType: 'project', entityId: id, action: 'deleted', oldValue: p.name })
-  })()
-  for (const f of files) moveToDeleted(ctx.paths, f)
+export async function deleteProject(ctx: AppContext, id: number): Promise<void> {
+  const p = await getProjectRow(ctx, id)
+  const files = await collectAttachmentPaths(ctx.db, 'p.id = ?', [id])
+  await withTx(ctx, async (tx) => {
+    await tx.db.run('DELETE FROM projects WHERE id = ?', [id])
+    await logActivity(tx.db, { entityType: 'project', entityId: id, action: 'deleted', oldValue: p.name })
+  })
+  for (const f of files) await moveToDeleted(ctx.storage, f)
 }
 
-export function getSpaceTree(ctx: AppContext, opts: { includeArchived?: boolean }): SpaceTree {
-  const arch = opts.includeArchived ? 1 : 0
+export async function getSpaceTree(ctx: AppContext, opts: { includeArchived?: boolean }): Promise<SpaceTree> {
+  const arch = !!opts.includeArchived
   const companies = camelAll<Company>(
-    ctx.db.prepare("SELECT * FROM companies WHERE (? OR status = 'active') ORDER BY is_personal DESC, position, id").all(arch)
+    await ctx.db.many("SELECT * FROM companies WHERE (?::boolean OR status = 'active') ORDER BY is_personal DESC, position, id", [arch])
   )
-  const folders = camelAll<Folder>(ctx.db.prepare('SELECT * FROM folders WHERE (? OR archived_at IS NULL) ORDER BY position, id').all(arch))
-  const projects = camelAll<Project>(ctx.db.prepare('SELECT * FROM projects WHERE (? OR archived_at IS NULL) ORDER BY position, id').all(arch))
+  const folders = camelAll<Folder>(await ctx.db.many('SELECT * FROM folders WHERE (?::boolean OR archived_at IS NULL) ORDER BY position, id', [arch]))
+  const projects = camelAll<Project>(await ctx.db.many('SELECT * FROM projects WHERE (?::boolean OR archived_at IS NULL) ORDER BY position, id', [arch]))
   const build = (companyId: number, parentId: number | null): FolderNode[] =>
     folders
       .filter((f) => f.companyId === companyId && f.parentId === parentId)

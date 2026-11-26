@@ -2,81 +2,85 @@ import type { Board, CardSummary, Column, Company, Project } from '@shared/types
 import { CARD_COLS, toCards } from './cards'
 import { DEFAULT_COLUMNS } from '@shared/constants'
 import type { AppContext } from '../context'
-import { camel, camelAll, must, requireName } from '../lib/rows'
+import { withTx } from '../db/tx'
+import { camel, camelAll, insertId, must, requireName } from '../lib/rows'
 import { positionForInsert } from '../lib/position'
 import { logActivity } from '../lib/activity'
 import { collectAttachmentPaths, moveToDeleted } from './attachments'
 
-const TS = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
-
-export function getBoardRow(ctx: AppContext, id: number): Board {
-  return camel<Board>(must(ctx.db.prepare('SELECT * FROM boards WHERE id = ?').get(id) as Record<string, unknown>, 'Quadro'))
+export async function getBoardRow(ctx: AppContext, id: number): Promise<Board> {
+  return camel<Board>(must(await ctx.db.one('SELECT * FROM boards WHERE id = ?', [id]), 'Quadro'))
 }
 
-export function createBoard(ctx: AppContext, input: { projectId: number; name: string }): Board {
+export async function createBoard(ctx: AppContext, input: { projectId: number; name: string }): Promise<Board> {
   const name = requireName(input.name)
-  return ctx.db.transaction(() => {
-    const pos = positionForInsert(ctx.db, 'boards', 'project_id = ?', [input.projectId], null, null)
-    const id = ctx.db.prepare('INSERT INTO boards(project_id, name, position) VALUES (?, ?, ?)').run(input.projectId, name, pos).lastInsertRowid as number
-    const ins = ctx.db.prepare('INSERT INTO columns(board_id, name, category, position) VALUES (?, ?, ?, ?)')
-    DEFAULT_COLUMNS.forEach((c, i) => ins.run(id, c.name, c.category, (i + 1) * 1024))
-    logActivity(ctx.db, { entityType: 'board', entityId: id, action: 'created' })
-    return getBoardRow(ctx, id)
-  })()
+  return withTx(ctx, async (tx) => {
+    const pos = await positionForInsert(tx.db, 'boards', 'project_id = ?', [input.projectId], null, null)
+    const id = await insertId(tx.db, 'INSERT INTO boards(project_id, name, position) VALUES (?, ?, ?)', [input.projectId, name, pos])
+    for (const [i, c] of DEFAULT_COLUMNS.entries()) {
+      await tx.db.run('INSERT INTO columns(board_id, name, category, position) VALUES (?, ?, ?, ?)', [id, c.name, c.category, (i + 1) * 1024])
+    }
+    await logActivity(tx.db, { entityType: 'board', entityId: id, action: 'created' })
+    return getBoardRow(tx, id)
+  })
 }
 
-export function listBoards(ctx: AppContext, input: { projectId: number; includeArchived?: boolean }): Board[] {
+export async function listBoards(ctx: AppContext, input: { projectId: number; includeArchived?: boolean }): Promise<Board[]> {
   return camelAll<Board>(
-    ctx.db
-      .prepare('SELECT * FROM boards WHERE project_id = ? AND (? OR archived_at IS NULL) ORDER BY position, id')
-      .all(input.projectId, input.includeArchived ? 1 : 0)
+    await ctx.db.many('SELECT * FROM boards WHERE project_id = ? AND (?::boolean OR archived_at IS NULL) ORDER BY position, id', [
+      input.projectId,
+      !!input.includeArchived
+    ])
   )
 }
 
-export function updateBoard(ctx: AppContext, id: number, patch: { name?: string; color?: string | null }): Board {
-  const cur = getBoardRow(ctx, id)
-  ctx.db
-    .prepare(`UPDATE boards SET name = ?, color = ?, updated_at = ${TS} WHERE id = ?`)
-    .run(patch.name !== undefined ? requireName(patch.name) : cur.name, patch.color !== undefined ? patch.color : cur.color, id)
+export async function updateBoard(ctx: AppContext, id: number, patch: { name?: string; color?: string | null }): Promise<Board> {
+  const cur = await getBoardRow(ctx, id)
+  await ctx.db.run('UPDATE boards SET name = ?, color = ?, updated_at = iso_now() WHERE id = ?', [
+    patch.name !== undefined ? requireName(patch.name) : cur.name,
+    patch.color !== undefined ? patch.color : cur.color,
+    id
+  ])
   return getBoardRow(ctx, id)
 }
 
-export function reorderBoard(ctx: AppContext, id: number, w: { beforeId: number | null; afterId: number | null }): void {
-  const b = getBoardRow(ctx, id)
-  const pos = positionForInsert(ctx.db, 'boards', 'project_id = ?', [b.projectId], w.beforeId, w.afterId)
-  ctx.db.prepare('UPDATE boards SET position = ? WHERE id = ?').run(pos, id)
+export async function reorderBoard(ctx: AppContext, id: number, w: { beforeId: number | null; afterId: number | null }): Promise<void> {
+  const b = await getBoardRow(ctx, id)
+  const pos = await positionForInsert(ctx.db, 'boards', 'project_id = ?', [b.projectId], w.beforeId, w.afterId)
+  await ctx.db.run('UPDATE boards SET position = ? WHERE id = ?', [pos, id])
 }
 
-export function archiveBoard(ctx: AppContext, id: number): Board {
-  getBoardRow(ctx, id)
-  ctx.db.prepare(`UPDATE boards SET archived_at = ${TS} WHERE id = ?`).run(id)
-  logActivity(ctx.db, { entityType: 'board', entityId: id, action: 'archived' })
+export async function archiveBoard(ctx: AppContext, id: number): Promise<Board> {
+  await getBoardRow(ctx, id)
+  await ctx.db.run('UPDATE boards SET archived_at = iso_now() WHERE id = ?', [id])
+  await logActivity(ctx.db, { entityType: 'board', entityId: id, action: 'archived' })
   return getBoardRow(ctx, id)
 }
 
-export function restoreBoard(ctx: AppContext, id: number): Board {
-  getBoardRow(ctx, id)
-  ctx.db.prepare('UPDATE boards SET archived_at = NULL WHERE id = ?').run(id)
-  logActivity(ctx.db, { entityType: 'board', entityId: id, action: 'restored' })
+export async function restoreBoard(ctx: AppContext, id: number): Promise<Board> {
+  await getBoardRow(ctx, id)
+  await ctx.db.run('UPDATE boards SET archived_at = NULL WHERE id = ?', [id])
+  await logActivity(ctx.db, { entityType: 'board', entityId: id, action: 'restored' })
   return getBoardRow(ctx, id)
 }
 
-export function deleteBoard(ctx: AppContext, id: number): void {
-  getBoardRow(ctx, id)
-  const files = collectAttachmentPaths(ctx.db, 't.board_id = ?', [id])
-  ctx.db.prepare('DELETE FROM boards WHERE id = ?').run(id)
-  for (const f of files) moveToDeleted(ctx.paths, f)
+export async function deleteBoard(ctx: AppContext, id: number): Promise<void> {
+  await getBoardRow(ctx, id)
+  const files = await collectAttachmentPaths(ctx.db, 't.board_id = ?', [id])
+  await ctx.db.run('DELETE FROM boards WHERE id = ?', [id])
+  for (const f of files) await moveToDeleted(ctx.storage, f)
 }
 
 export type BoardFull = { board: Board; project: Project; company: Company; columns: Column[]; cards: CardSummary[] }
 
-export function getBoard(ctx: AppContext, id: number, opts: { includeArchived?: boolean }): BoardFull {
-  const board = getBoardRow(ctx, id)
-  const project = camel<Project>(ctx.db.prepare('SELECT * FROM projects WHERE id = ?').get(board.projectId) as Record<string, unknown>)
-  const company = camel<Company>(ctx.db.prepare('SELECT * FROM companies WHERE id = ?').get(project.companyId) as Record<string, unknown>)
-  const columns = camelAll<Column>(ctx.db.prepare('SELECT * FROM columns WHERE board_id = ? ORDER BY position, id').all(id))
-  const rows = ctx.db
-    .prepare(`SELECT ${CARD_COLS} FROM v_tasks t WHERE t.board_id = ? AND (? OR t.archived_at IS NULL) ORDER BY t.position, t.id`)
-    .all(id, opts.includeArchived ? 1 : 0) as Record<string, unknown>[]
-  return { board, project, company, columns, cards: toCards(ctx, rows) }
+export async function getBoard(ctx: AppContext, id: number, opts: { includeArchived?: boolean }): Promise<BoardFull> {
+  const board = await getBoardRow(ctx, id)
+  const project = camel<Project>((await ctx.db.one('SELECT * FROM projects WHERE id = ?', [board.projectId]))!)
+  const company = camel<Company>((await ctx.db.one('SELECT * FROM companies WHERE id = ?', [project.companyId]))!)
+  const columns = camelAll<Column>(await ctx.db.many('SELECT * FROM columns WHERE board_id = ? ORDER BY position, id', [id]))
+  const rows = await ctx.db.many(
+    `SELECT ${CARD_COLS} FROM v_tasks t WHERE t.board_id = ? AND (?::boolean OR t.archived_at IS NULL) ORDER BY t.position, t.id`,
+    [id, !!opts.includeArchived]
+  )
+  return { board, project, company, columns, cards: await toCards(ctx, rows) }
 }

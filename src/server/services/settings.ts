@@ -1,8 +1,8 @@
-import type Database from 'better-sqlite3'
+import type { Db } from '../db/db'
 import { SETTINGS_DEFAULTS } from '@shared/constants'
 
-export function getSetting<T>(db: Database.Database, key: string, fallback: T): T {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
+export async function getSetting<T>(db: Db, key: string, fallback: T): Promise<T> {
+  const row = await db.one<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key])
   if (!row) return fallback
   try {
     return JSON.parse(row.value) as T
@@ -11,16 +11,16 @@ export function getSetting<T>(db: Database.Database, key: string, fallback: T): 
   }
 }
 
-export function setSetting(db: Database.Database, key: string, value: unknown): void {
-  db.prepare('INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(
+export async function setSetting(db: Db, key: string, value: unknown): Promise<void> {
+  await db.run('INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [
     key,
     JSON.stringify(value ?? null)
-  )
+  ])
 }
 
-export function getAllSettings(db: Database.Database): Record<string, unknown> {
+export async function getAllSettings(db: Db): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = { ...SETTINGS_DEFAULTS }
-  for (const r of db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[]) {
+  for (const r of await db.many<{ key: string; value: string }>('SELECT key, value FROM settings')) {
     try {
       out[r.key] = JSON.parse(r.value)
     } catch {

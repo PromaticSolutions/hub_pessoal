@@ -1,3 +1,4 @@
+import type { Db } from '../db/db'
 import { AppError } from './errors'
 
 const BOOL_KEYS = new Set(['isPersonal', 'done', 'effectiveArchived'])
@@ -24,4 +25,10 @@ export function requireName(name: string | undefined, what = 'Nome'): string {
   const n = (name ?? '').trim()
   if (!n) throw new AppError('VALIDATION', `${what} é obrigatório.`)
   return n
+}
+
+/** Runs an INSERT and returns the new row id (`INSERT … RETURNING id`). */
+export async function insertId(db: Db, sql: string, params: unknown[]): Promise<number> {
+  const row = await db.one<{ id: number }>(`${sql} RETURNING id`, params)
+  return row!.id
 }

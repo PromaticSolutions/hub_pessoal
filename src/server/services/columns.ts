@@ -1,71 +1,84 @@
 import type { Column, ColumnCategory } from '@shared/types'
 import type { AppContext } from '../context'
+import { withTx } from '../db/tx'
 import { AppError } from '../lib/errors'
-import { camel, must, requireName } from '../lib/rows'
+import { camel, insertId, must, requireName } from '../lib/rows'
 import { positionForInsert } from '../lib/position'
 import { collectAttachmentPaths, moveToDeleted } from './attachments'
 
-const TS = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
-
-export function getColumn(ctx: AppContext, id: number): Column {
-  return camel<Column>(must(ctx.db.prepare('SELECT * FROM columns WHERE id = ?').get(id) as Record<string, unknown>, 'Coluna'))
+export async function getColumn(ctx: AppContext, id: number): Promise<Column> {
+  return camel<Column>(must(await ctx.db.one('SELECT * FROM columns WHERE id = ?', [id]), 'Coluna'))
 }
 
-export function createColumn(ctx: AppContext, input: { boardId: number; name: string; category: ColumnCategory; afterId?: number | null }): Column {
+export async function createColumn(
+  ctx: AppContext,
+  input: { boardId: number; name: string; category: ColumnCategory; afterId?: number | null }
+): Promise<Column> {
   const name = requireName(input.name)
   let beforeId: number | null = null
   let afterId: number | null = null
   if (input.afterId != null) {
     beforeId = input.afterId
-    const next = ctx.db
-      .prepare('SELECT id FROM columns WHERE board_id = ? AND position > (SELECT position FROM columns WHERE id = ?) ORDER BY position LIMIT 1')
-      .get(input.boardId, input.afterId) as { id: number } | undefined
+    const next = await ctx.db.one<{ id: number }>(
+      'SELECT id FROM columns WHERE board_id = ? AND position > (SELECT position FROM columns WHERE id = ?) ORDER BY position LIMIT 1',
+      [input.boardId, input.afterId]
+    )
     afterId = next?.id ?? null
   }
-  const pos = positionForInsert(ctx.db, 'columns', 'board_id = ?', [input.boardId], beforeId, afterId)
-  const id = ctx.db.prepare('INSERT INTO columns(board_id, name, category, position) VALUES (?, ?, ?, ?)').run(input.boardId, name, input.category, pos)
-    .lastInsertRowid as number
+  const pos = await positionForInsert(ctx.db, 'columns', 'board_id = ?', [input.boardId], beforeId, afterId)
+  const id = await insertId(ctx.db, 'INSERT INTO columns(board_id, name, category, position) VALUES (?, ?, ?, ?)', [input.boardId, name, input.category, pos])
   return getColumn(ctx, id)
 }
 
-export function updateColumn(ctx: AppContext, id: number, patch: { name?: string; category?: ColumnCategory; color?: string | null }): Column {
-  const cur = getColumn(ctx, id)
+export async function updateColumn(
+  ctx: AppContext,
+  id: number,
+  patch: { name?: string; category?: ColumnCategory; color?: string | null }
+): Promise<Column> {
+  const cur = await getColumn(ctx, id)
   const name = patch.name !== undefined ? requireName(patch.name) : cur.name
   const category = patch.category ?? cur.category
-  ctx.db.transaction(() => {
-    ctx.db.prepare(`UPDATE columns SET name = ?, category = ?, color = ?, updated_at = ${TS} WHERE id = ?`).run(name, category, patch.color !== undefined ? patch.color : cur.color, id)
+  await withTx(ctx, async (tx) => {
+    await tx.db.run('UPDATE columns SET name = ?, category = ?, color = ?, updated_at = iso_now() WHERE id = ?', [
+      name,
+      category,
+      patch.color !== undefined ? patch.color : cur.color,
+      id
+    ])
     if (category !== cur.category) {
-      if (category === 'done') ctx.db.prepare(`UPDATE tasks SET completed_at = coalesce(completed_at, ${TS}) WHERE column_id = ?`).run(id)
-      else ctx.db.prepare('UPDATE tasks SET completed_at = NULL WHERE column_id = ?').run(id)
+      if (category === 'done') await tx.db.run('UPDATE tasks SET completed_at = coalesce(completed_at, iso_now()) WHERE column_id = ?', [id])
+      else await tx.db.run('UPDATE tasks SET completed_at = NULL WHERE column_id = ?', [id])
     }
-  })()
+  })
   return getColumn(ctx, id)
 }
 
-export function moveColumn(ctx: AppContext, input: { id: number; beforeId: number | null; afterId: number | null }): Column {
-  const c = getColumn(ctx, input.id)
-  const pos = positionForInsert(ctx.db, 'columns', 'board_id = ? AND id <> ?', [c.boardId, c.id], input.beforeId, input.afterId)
-  ctx.db.prepare('UPDATE columns SET position = ? WHERE id = ?').run(pos, c.id)
+export async function moveColumn(ctx: AppContext, input: { id: number; beforeId: number | null; afterId: number | null }): Promise<Column> {
+  const c = await getColumn(ctx, input.id)
+  const pos = await positionForInsert(ctx.db, 'columns', 'board_id = ? AND id <> ?', [c.boardId, c.id], input.beforeId, input.afterId)
+  await ctx.db.run('UPDATE columns SET position = ? WHERE id = ?', [pos, c.id])
   return getColumn(ctx, c.id)
 }
 
-export function deleteColumn(ctx: AppContext, input: { id: number; moveTasksTo: number | null }): void {
-  const c = getColumn(ctx, input.id)
+export async function deleteColumn(ctx: AppContext, input: { id: number; moveTasksTo: number | null }): Promise<void> {
+  const c = await getColumn(ctx, input.id)
   if (input.moveTasksTo != null) {
-    const dest = getColumn(ctx, input.moveTasksTo)
+    const dest = await getColumn(ctx, input.moveTasksTo)
     if (dest.boardId !== c.boardId || dest.id === c.id) throw new AppError('VALIDATION', 'A coluna de destino precisa ser outra coluna do mesmo quadro.')
-    ctx.db.transaction(() => {
-      const max = (ctx.db.prepare('SELECT coalesce(max(position), 0) m FROM tasks WHERE column_id = ?').get(dest.id) as { m: number }).m
-      const tasks = ctx.db.prepare('SELECT id FROM tasks WHERE column_id = ? ORDER BY position').all(c.id) as { id: number }[]
-      const upd = ctx.db.prepare(
-        `UPDATE tasks SET column_id = ?, position = ?, completed_at = CASE WHEN ? = 'done' THEN coalesce(completed_at, ${TS}) ELSE NULL END WHERE id = ?`
-      )
-      tasks.forEach((t, i) => upd.run(dest.id, max + (i + 1) * 1024, dest.category, t.id))
-      ctx.db.prepare('DELETE FROM columns WHERE id = ?').run(c.id)
-    })()
+    await withTx(ctx, async (tx) => {
+      const max = (await tx.db.one<{ m: number }>('SELECT coalesce(max(position), 0) m FROM tasks WHERE column_id = ?', [dest.id]))!.m
+      const tasks = await tx.db.many<{ id: number }>('SELECT id FROM tasks WHERE column_id = ? ORDER BY position', [c.id])
+      for (const [i, t] of tasks.entries()) {
+        await tx.db.run(
+          `UPDATE tasks SET column_id = ?, position = ?, completed_at = CASE WHEN ?::text = 'done' THEN coalesce(completed_at, iso_now()) ELSE NULL END WHERE id = ?`,
+          [dest.id, max + (i + 1) * 1024, dest.category, t.id]
+        )
+      }
+      await tx.db.run('DELETE FROM columns WHERE id = ?', [c.id])
+    })
     return
   }
-  const files = collectAttachmentPaths(ctx.db, 't.column_id = ?', [c.id])
-  ctx.db.prepare('DELETE FROM columns WHERE id = ?').run(c.id)
-  for (const f of files) moveToDeleted(ctx.paths, f)
+  const files = await collectAttachmentPaths(ctx.db, 't.column_id = ?', [c.id])
+  await ctx.db.run('DELETE FROM columns WHERE id = ?', [c.id])
+  for (const f of files) await moveToDeleted(ctx.storage, f)
 }

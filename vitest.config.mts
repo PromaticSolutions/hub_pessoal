@@ -17,6 +17,7 @@ export default defineConfig({
     pool: 'forks',
     setupFiles: ['tests/setup.ts'],
     globalSetup: ['tests/global-setup.ts'],
-    testTimeout: 30000
+    testTimeout: 30000,
+    maxWorkers: 3
   }
 })
