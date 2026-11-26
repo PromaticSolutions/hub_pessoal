@@ -12,6 +12,7 @@ import SpacePage from '../features/companies/SpacePage'
 import ProjectPage from '../features/projects/ProjectPage'
 import SearchPage from '../features/search/SearchPage'
 import SettingsPage from '../features/settings/SettingsPage'
+import AllTasksPage from '../features/all-tasks/AllTasksPage'
 import { EmptyState, PageHeader } from '../components/ui'
 
 function NotFoundPage() {
@@ -45,6 +46,7 @@ export function AppRoutes() {
         <Route element={<Layout />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/week" element={<WeekPage />} />
+          <Route path="/all" element={<AllTasksPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/files" element={<FilesPage />} />
           <Route path="/companies" element={<CompaniesPage />} />

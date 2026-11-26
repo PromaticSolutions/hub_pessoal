@@ -1,0 +1,31 @@
+import { test, expect } from '@playwright/test'
+import { invoke, launchApp, makeTempDir, pick } from '../helpers/app'
+
+test('todas as tarefas: filtros, edição em massa, mover, excluir e abrir modal', async () => {
+  const { app, page } = await launchApp(makeTempDir('pth-all-'))
+  const a = await invoke(page, 'projects.create', { companyId: 1, folderId: null, name: 'Alfa', color: '#000' })
+  const b = await invoke(page, 'projects.create', { companyId: 1, folderId: null, name: 'Beta', color: '#000' })
+  const dest = await invoke(page, 'projects.create', { companyId: 1, folderId: null, name: 'Destino', color: '#000' })
+  const t = [] as { id: number }[]
+  for (const [p, title] of [[a.id, 'Um'], [a.id, 'Dois'], [b.id, 'Três'], [b.id, 'Quatro']] as const) t.push(await invoke(page, 'tasks.quickCreate', { projectId: p, title }))
+  await page.getByTestId('nav-all').click()
+  await expect(page.getByTestId('all-count')).toHaveText('4 tarefa(s)')
+  await page.getByTestId('all-search').fill('Três')
+  await expect(page.getByTestId('all-count')).toHaveText('1 tarefa(s)')
+  await page.getByTestId('all-search').fill('')
+  for (const x of t.slice(0, 3)) await page.getByTestId(`all-check-${x.id}`).click()
+  await pick(page, 'bulk-priority', 'urgent')
+  await expect.poll(async () => (await invoke(page, 'tasks.query', { filter: { priorities: ['urgent'] }, sort: 'due' })).length).toBe(3)
+  await pick(page, 'bulk-move', String(dest.id))
+  await expect.poll(async () => (await invoke(page, 'tasks.query', { filter: { projectIds: [dest.id] }, sort: 'due' })).length).toBe(3)
+  await page.getByTestId(`all-check-${t[3].id}`).click()
+  await page.getByTestId('bulk-delete').click()
+  await page.getByTestId('confirm-ok').click()
+  await expect(page.getByTestId('all-count')).toHaveText('3 tarefa(s)')
+  await page.getByTestId(`all-row-${t[0].id}`).getByText('Um').click()
+  await expect(page.getByTestId('task-modal')).toBeVisible()
+  await page.getByTestId('task-modal-close').click()
+  await page.getByTestId('all-view-cards').click()
+  await expect(page.getByTestId(`all-card-${t[0].id}`)).toBeVisible()
+  await app.close()
+})
