@@ -20,6 +20,7 @@ import * as dashboard from '../services/dashboard'
 import * as bulk from '../services/bulk'
 import * as dayBlocks from '../services/dayBlocks'
 import * as ideas from '../services/ideas'
+import * as shopping from '../services/shopping'
 import * as calendar from '../services/calendar'
 import * as searchSvc from '../services/search'
 import * as backup from '../services/backup'
@@ -61,6 +62,15 @@ const ideaFields = z.object({
   status: ideaStatus.optional(),
   companyId: zid.nullable().optional(),
   projectId: zid.nullable().optional()
+})
+const shoppingFields = z.object({
+  notes: z.string().optional(),
+  quantity: z.number().optional(),
+  unit: z.string().optional(),
+  category: z.string().optional(),
+  priceCents: z.number().int().nullable().optional(),
+  url: z.string().nullable().optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional()
 })
 const between = { beforeId: zid.nullable(), afterId: zid.nullable() }
 
@@ -266,6 +276,15 @@ export const handlers = {
   'ideas.delete': h(ID, (c, i) => ideas.deleteIdea(c, i.id)),
   'ideas.toTask': h(z.object({ id: zid, projectId: zid }), (c, i) => ideas.convertIdeaToTask(c, i)),
   'ideas.toProject': h(z.object({ id: zid, companyId: zid, folderId: zid.nullable() }), (c, i) => ideas.convertIdeaToProject(c, i)),
+  // compras
+  'shopping.list': h(z.object({ status: z.enum(['pending', 'bought', 'all']).optional(), category: z.string().optional() }), (c, i) => shopping.listShopping(c, i)),
+  'shopping.totals': h(z.object({}), (c) => shopping.shoppingTotals(c)),
+  'shopping.categories': h(z.object({}), (c) => shopping.listShoppingCategories(c)),
+  'shopping.create': h(shoppingFields.extend({ name: z.string() }), (c, i) => shopping.createShoppingItem(c, i)),
+  'shopping.quickAdd': h(z.object({ text: z.string() }), (c, i) => shopping.quickAddShopping(c, i.text)),
+  'shopping.update': h(shoppingFields.extend({ id: zid, name: z.string().optional() }), (c, { id, ...p }) => shopping.updateShoppingItem(c, id, p)),
+  'shopping.setBought': h(z.object({ id: zid, bought: z.boolean() }), (c, i) => shopping.setBought(c, i.id, i.bought)),
+  'shopping.delete': h(ID, (c, i) => shopping.deleteShoppingItem(c, i.id)),
   // @@end
 } satisfies Record<string, Handler>
 
