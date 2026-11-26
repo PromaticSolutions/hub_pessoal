@@ -16,7 +16,7 @@ test('lista de compras: adicionar rápido, preço, total, comprado', async () =>
   await page.getByTestId('shopping-category').fill('Mercado')
   await page.getByTestId('shopping-save').click()
   await expect.poll(async () => norm(await page.getByTestId('shopping-total').textContent())).toBe('R$ 25,00')
-  await page.getByTestId(`shopping-check-${item.id}`).check()
+  await page.getByTestId(`shopping-check-${item.id}`).click() // the row leaves the "pending" list right away
   await expect.poll(async () => norm(await page.getByTestId('shopping-total').textContent())).toBe('R$ 0,00')
   await expect(page.getByTestId(`shopping-item-${item.id}`)).toHaveCount(0)
   await page.getByTestId('shopping-filter-bought').click()
