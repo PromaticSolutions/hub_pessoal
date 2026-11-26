@@ -50,5 +50,9 @@ export const SETTINGS_DEFAULTS = {
   showStartMarkers: true
 }
 
-export const AUTO_BACKUP_KEEP = 14
+export const AUTO_BACKUP_KEEP = 30
+/** Largest file accepted by Storage (bucket limit). */
+export const MAX_FILE_BYTES = 50 * 1024 * 1024
+/** Browser uploads under uploads/tmp/ not attached within this many hours are purged. */
+export const TMP_UPLOAD_HOURS = 24
 export const DELETED_ATTACHMENT_DAYS = 30

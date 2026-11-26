@@ -143,7 +143,7 @@ export async function deleteProject(ctx: AppContext, id: number): Promise<void> 
     await tx.db.run('DELETE FROM projects WHERE id = ?', [id])
     await logActivity(tx.db, { entityType: 'project', entityId: id, action: 'deleted', oldValue: p.name })
   })
-  for (const f of files) await moveToDeleted(ctx.storage, f)
+  for (const f of files) await moveToDeleted(ctx, f)
 }
 
 export async function getSpaceTree(ctx: AppContext, opts: { includeArchived?: boolean }): Promise<SpaceTree> {

@@ -209,7 +209,7 @@ export async function deleteTask(ctx: AppContext, id: number): Promise<void> {
   await getTaskRow(ctx, id)
   const files = await collectAttachmentPaths(ctx.db, 'a.task_id = ?', [id])
   await ctx.db.run('DELETE FROM tasks WHERE id = ?', [id])
-  for (const f of files) await moveToDeleted(ctx.storage, f)
+  for (const f of files) await moveToDeleted(ctx, f)
 }
 
 export async function listActivity(ctx: AppContext, taskId: number): Promise<ActivityEntry[]> {

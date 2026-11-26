@@ -4,7 +4,8 @@ import { createTask, getTaskRow, setTaskStatus, archiveTask } from '@server/serv
 import { deleteColumn } from '@server/services/columns'
 import { bulkUpdate } from '@server/services/bulk'
 import { queryTasks } from '@server/services/taskQuery'
-import { createTestCtx } from '../helpers/ctx'
+import { addAttachments } from '@server/services/attachments'
+import { createTestCtx, tempUpload } from '../helpers/ctx'
 
 let T: Awaited<ReturnType<typeof createTestCtx>>
 beforeEach(async () => { T = await createTestCtx(new Date(2026, 10, 25, 12)) })
@@ -63,8 +64,19 @@ test('mover usa o primeiro quadro não arquivado do destino', async () => {
   expect((await getTaskRow(T.ctx, t.id)).boardId).toBe(nb.id)
 })
 
-// Task 5: needs addAttachments (Storage upload).
-test.skip('arquivar, restaurar e excluir (anexos vão para attachments-deleted)', () => {})
+test('arquivar, restaurar e excluir (anexos vão para attachments-deleted)', async () => {
+  const a = await proj('A')
+  const ids: number[] = []
+  for (const i of [1, 2]) ids.push((await createTask(T.ctx, { columnId: a.cols[0].id, title: `t${i}` })).id)
+  const [att] = await addAttachments(T.ctx, { taskId: ids[0], uploads: [await tempUpload(T.ctx.storage, 'a.txt', 'x')] })
+  await bulkUpdate(T.ctx, { ids, action: { kind: 'archive' } })
+  expect(await queryTasks(T.ctx, { filter: {}, sort: 'due' })).toHaveLength(0)
+  await bulkUpdate(T.ctx, { ids, action: { kind: 'restore' } })
+  expect(await queryTasks(T.ctx, { filter: {}, sort: 'due' })).toHaveLength(2)
+  expect(await bulkUpdate(T.ctx, { ids, action: { kind: 'delete' } })).toEqual({ updated: 2, skipped: 0 })
+  expect(await count()).toBe(0)
+  expect(await T.ctx.storage.exists(`deleted/2026-11-25/${att.storedPath}`)).toBe(true)
+})
 
 test('falha no meio não altera nada (tudo ou nada)', async () => {
   const a = await proj('A')

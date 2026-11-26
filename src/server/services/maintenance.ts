@@ -1,86 +1,51 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
-import { join } from 'node:path'
-import type Database from 'better-sqlite3'
-import { AUTO_BACKUP_KEEP, DELETED_ATTACHMENT_DAYS } from '@shared/constants'
+import { AUTO_BACKUP_KEEP, DELETED_ATTACHMENT_DAYS, TMP_UPLOAD_HOURS } from '@shared/constants'
 import { toLocalDate } from '@shared/dates'
-import type { DataPaths } from '../paths'
-import { fileStamp, vacuumInto } from '../db/sqlutil'
-import { openDatabase } from '../db/connection'
+import type { AppContext } from '../context'
+import { UPLOAD_PREFIX } from './attachments'
+import { createBackup, listAutoBackups, parseBackupKey } from './backup'
 
-export function quickCheck(db: Database.Database): boolean {
-  try {
-    return db.pragma('quick_check', { simple: true }) === 'ok'
-  } catch {
-    return false
-  }
-}
+export { listAutoBackups } from './backup'
 
-export function listAutoBackups(paths: DataPaths): { file: string; date: string; sizeBytes: number }[] {
-  if (!existsSync(paths.backupsAuto)) return []
-  return readdirSync(paths.backupsAuto)
-    .filter((f) => /^hub-\d{4}-\d{2}-\d{2}\.db$/.test(f))
-    .sort()
-    .reverse()
-    .map((f) => ({ file: join(paths.backupsAuto, f), date: f.slice(4, 14), sizeBytes: statSync(join(paths.backupsAuto, f)).size }))
-}
-
-export function runDailyAutoBackup(db: Database.Database, paths: DataPaths, now: Date, keep = AUTO_BACKUP_KEEP): string | null {
-  const file = join(paths.backupsAuto, `hub-${toLocalDate(now)}.db`)
-  if (existsSync(file)) return null
-  vacuumInto(db, file)
-  for (const old of listAutoBackups(paths).slice(keep)) rmSync(old.file, { force: true })
-  return file
-}
-
-export function purgeDeletedAttachments(paths: DataPaths, now: Date, days = DELETED_ATTACHMENT_DAYS): number {
-  if (!existsSync(paths.attachmentsDeleted)) return 0
-  const limit = now.getTime() - days * 86_400_000
-  let removed = 0
-  const walk = (dir: string) => {
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      const p = join(dir, e.name)
-      if (e.isDirectory()) walk(p)
-      else if (statSync(p).mtimeMs < limit) {
-        rmSync(p, { force: true })
-        removed++
-      }
-    }
-  }
-  walk(paths.attachmentsDeleted)
-  return removed
-}
-
-export function closeDatabase(db: Database.Database): void {
-  if (!db.open) return
-  try {
-    db.pragma('wal_checkpoint(TRUNCATE)')
-  } finally {
-    db.close()
-  }
+/** One automatic backup per local day; keeps the newest `keep`. Returns the new key, or null. */
+export async function runDailyAutoBackup(ctx: AppContext, keep = AUTO_BACKUP_KEEP): Promise<string | null> {
+  const today = toLocalDate(ctx.now())
+  const autos = await listAutoBackups(ctx)
+  if (autos.some((b) => parseBackupKey(b.key)?.date === today)) return null
+  const { key } = await createBackup(ctx, 'auto')
+  const old = (await listAutoBackups(ctx)).slice(keep).map((b) => b.key)
+  if (old.length) await ctx.storage.remove(old)
+  return key
 }
 
 /**
- * Corruption recovery: moves the current DB files to backups/pre-restore/corrupted-<stamp>/ and
- * restores the newest automatic backup that passes quick_check. Returns the open DB, or null.
+ * Removes files deleted more than `days` days ago. Keys are `deleted/<YYYY-MM-DD>/…` (deletion day);
+ * a key without that date falls back to the object's `updatedAt`.
  */
-export function recoverFromAutoBackups(paths: DataPaths): Database.Database | null {
-  const aside = join(paths.backupsPreRestore, `corrupted-${fileStamp()}`)
-  mkdirSync(aside, { recursive: true })
-  for (const suffix of ['', '-wal', '-shm']) {
-    const f = paths.dbFile + suffix
-    if (existsSync(f)) renameSync(f, join(aside, `hub.db${suffix}`))
-  }
-  for (const b of listAutoBackups(paths)) {
-    let db: Database.Database | null = null
-    try {
-      copyFileSync(b.file, paths.dbFile)
-      db = openDatabase(paths.dbFile)
-      if (quickCheck(db)) return db
-    } catch {
-      /* try the next one */
-    }
-    try { db?.close() } catch { /* ignore */ }
-    for (const suffix of ['', '-wal', '-shm']) rmSync(paths.dbFile + suffix, { force: true })
-  }
-  return null
+export async function purgeDeletedAttachments(ctx: AppContext, days = DELETED_ATTACHMENT_DAYS): Promise<number> {
+  const now = ctx.now()
+  const limitDay = toLocalDate(new Date(now.getTime() - days * 86_400_000))
+  const limitMs = now.getTime() - days * 86_400_000
+  const old = (await ctx.storage.list('deleted/'))
+    .filter((f) => {
+      const day = /^deleted\/(\d{4}-\d{2}-\d{2})\//.exec(f.key)?.[1]
+      return day ? day < limitDay : Date.parse(f.updatedAt) < limitMs
+    })
+    .map((f) => f.key)
+  if (old.length) await ctx.storage.remove(old)
+  return old.length
+}
+
+/** Removes browser uploads that were never attached (older than `hours`). */
+export async function purgeTmpUploads(ctx: AppContext, hours = TMP_UPLOAD_HOURS): Promise<number> {
+  const limit = ctx.now().getTime() - hours * 3_600_000
+  const old = (await ctx.storage.list(UPLOAD_PREFIX)).filter((f) => Date.parse(f.updatedAt) < limit).map((f) => f.key)
+  if (old.length) await ctx.storage.remove(old)
+  return old.length
+}
+
+/** Daily cron: automatic backup (if none today, keeps 30), purge of deleted/ (> 30 days) and uploads/tmp/ (> 1 day). */
+export async function runDailyMaintenance(ctx: AppContext): Promise<{ backup: string | null; purged: number }> {
+  const backup = await runDailyAutoBackup(ctx)
+  const purged = (await purgeDeletedAttachments(ctx)) + (await purgeTmpUploads(ctx))
+  return { backup, purged }
 }

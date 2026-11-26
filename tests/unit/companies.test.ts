@@ -1,8 +1,8 @@
 import {
   listCompanies, getCompany, createCompany, updateCompany, archiveCompany, restoreCompany,
-  getCompanyDeletionImpact, deleteCompany, reorderCompany
+  getCompanyDeletionImpact, deleteCompany, reorderCompany, setCompanyLogo
 } from '@server/services/companies'
-import { createTestCtx } from '../helpers/ctx'
+import { createTestCtx, tempUpload } from '../helpers/ctx'
 
 let T: Awaited<ReturnType<typeof createTestCtx>>
 beforeEach(async () => { T = await createTestCtx() })
@@ -59,11 +59,20 @@ test('deletionImpact e delete movem anexo para deleted/ no Storage', async () =>
   await deleteCompany(T.ctx, c.id)
   await expect(getCompany(T.ctx, c.id)).rejects.toMatchObject({ code: 'NOT_FOUND' })
   expect(await T.ctx.storage.exists('attachments/2026/11/x-a.txt')).toBe(false)
-  expect(new TextDecoder().decode(await T.ctx.storage.get('deleted/2026/11/x-a.txt'))).toBe('hello')
+  expect(new TextDecoder().decode(await T.ctx.storage.get('deleted/2026-11-25/2026/11/x-a.txt'))).toBe('hello')
 })
 
-// Task 5: logos move to Storage.
-test.skip('setCompanyLogo copia arquivo e troca o anterior', () => {})
+test('setCompanyLogo copia arquivo e troca o anterior', async () => {
+  const c = await createCompany(T.ctx, { name: 'A', color: '#000' })
+  const a = await setCompanyLogo(T.ctx, c.id, await tempUpload(T.ctx.storage, 'logo.png', 'one'))
+  expect(a.logoPath).toMatch(/^logos\//)
+  const first = a.logoPath!
+  expect(new TextDecoder().decode(await T.ctx.storage.get(first))).toBe('one')
+  const b = await setCompanyLogo(T.ctx, c.id, await tempUpload(T.ctx.storage, 'logo2.png', 'two'))
+  expect(await T.ctx.storage.exists(first)).toBe(false)
+  expect(new TextDecoder().decode(await T.ctx.storage.get(b.logoPath!))).toBe('two')
+  expect((await setCompanyLogo(T.ctx, c.id, null)).logoPath).toBeNull()
+})
 
 test('reorderCompany muda a ordem', async () => {
   const a = await createCompany(T.ctx, { name: 'A', color: '#000' })

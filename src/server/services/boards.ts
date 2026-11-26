@@ -68,7 +68,7 @@ export async function deleteBoard(ctx: AppContext, id: number): Promise<void> {
   await getBoardRow(ctx, id)
   const files = await collectAttachmentPaths(ctx.db, 't.board_id = ?', [id])
   await ctx.db.run('DELETE FROM boards WHERE id = ?', [id])
-  for (const f of files) await moveToDeleted(ctx.storage, f)
+  for (const f of files) await moveToDeleted(ctx, f)
 }
 
 export type BoardFull = { board: Board; project: Project; company: Company; columns: Column[]; cards: CardSummary[] }

@@ -80,5 +80,5 @@ export async function deleteColumn(ctx: AppContext, input: { id: number; moveTas
   }
   const files = await collectAttachmentPaths(ctx.db, 't.column_id = ?', [c.id])
   await ctx.db.run('DELETE FROM columns WHERE id = ?', [c.id])
-  for (const f of files) await moveToDeleted(ctx.storage, f)
+  for (const f of files) await moveToDeleted(ctx, f)
 }

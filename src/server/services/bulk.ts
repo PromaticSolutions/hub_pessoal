@@ -70,6 +70,6 @@ export async function bulkUpdate(ctx: AppContext, input: { ids: number[]; action
       }
     }
   })
-  for (const f of files) await moveToDeleted(ctx.storage, f)
+  for (const f of files) await moveToDeleted(ctx, f)
   return { updated, skipped }
 }

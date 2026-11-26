@@ -5,17 +5,23 @@ import { getBoard } from '@server/services/boards'
 import { createTask } from '@server/services/tasks'
 import { queryTasks } from '@server/services/taskQuery'
 import { getDashboard } from '@server/services/dashboard'
+import { gzipSync } from 'node:zlib'
+import { createBackup, restoreBackup } from '@server/services/backup'
+import { exportDataset } from '@server/services/dataset'
 import { createTestCtx } from '../helpers/ctx'
 
 let T: Awaited<ReturnType<typeof createTestCtx>>
 beforeEach(async () => { T = await createTestCtx() })
 afterEach(() => T.cleanup())
 
-// Task 5: SQLite file backup/recovery replaced by Storage backups.
-test.skip('vacuumInto não destrói o destino existente se a cópia falhar', () => {})
-
-// Task 5: SQLite file backup/recovery replaced by Storage backups.
-test.skip('recuperação ignora backup automático truncado e usa o mais novo íntegro', () => {})
+test('backup automático truncado é recusado e os dados atuais ficam', async () => {
+  await T.ctx.db.run("INSERT INTO companies(name, color) VALUES ('Atual', '#000')")
+  const key = (await createBackup(T.ctx, 'auto')).key
+  const bytes = await T.ctx.storage.get(key)
+  await T.ctx.storage.put(key, bytes.slice(0, Math.floor(bytes.length / 2)))
+  await expect(restoreBackup(T.ctx, key)).rejects.toMatchObject({ code: 'INVALID_BACKUP' })
+  expect(await T.ctx.db.one("SELECT count(*) n FROM companies WHERE name = 'Atual'")).toEqual({ n: 1 })
+})
 
 test('mover para o topo 1.200 vezes mantém a ordem', async () => {
   const p = await createProject(T.ctx, { companyId: 1, folderId: null, name: 'P', color: '#000' })
@@ -35,8 +41,16 @@ test('mover para o topo 1.200 vezes mantém a ordem', async () => {
   expect(order[0].position).toBeLessThan(order[1].position)
 })
 
-// Task 5: SQLite file backup/recovery replaced by Storage backups.
-test.skip('restauração que falha no meio desfaz a troca e mantém o banco atual', () => {})
+test('restauração que falha no meio desfaz a troca e mantém o banco atual', async () => {
+  await T.ctx.db.run("INSERT INTO companies(name, color) VALUES ('Atual', '#000')")
+  await createProject(T.ctx, { companyId: 1, folderId: null, name: 'P', color: '#000' })
+  const ds = await exportDataset(T.ctx.db, T.ctx.now())
+  // a row that breaks a foreign key halfway through the import
+  ds.tables.projects.push({ ...ds.tables.projects[0], id: 99, company_id: 12345, name: 'quebrado' })
+  await T.ctx.storage.put('backups/manual/hub-2026-11-25_120000.json.gz', gzipSync(Buffer.from(JSON.stringify(ds))))
+  await expect(restoreBackup(T.ctx, 'backups/manual/hub-2026-11-25_120000.json.gz')).rejects.toBeTruthy()
+  expect(await T.ctx.db.one("SELECT count(*) n FROM companies WHERE name = 'Atual'")).toEqual({ n: 1 })
+})
 
 test('tarefas de projeto dentro de pasta arquivada (inclusive ancestral) saem das visões ativas', async () => {
   const outer = await createFolder(T.ctx, { companyId: 1, parentId: null, name: 'Fora' })

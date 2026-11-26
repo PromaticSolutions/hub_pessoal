@@ -1,111 +1,89 @@
-import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import archiver from 'archiver'
-import { createWriteStream } from 'node:fs'
-import { once } from 'node:events'
-import { createCompany } from '@main/services/companies'
-import { createProject } from '@main/services/projects'
-import { getBoard } from '@main/services/boards'
-import { createTask } from '@main/services/tasks'
-import { addAttachments, getAttachmentAbsPath } from '@main/services/attachments'
-import { createFullBackup, createDbBackup, inspectBackup, applyRestore } from '@main/services/backup'
-import { LATEST_SCHEMA_VERSION } from '@main/db/migrate'
-import { openDatabase } from '@main/db/connection'
-import { resolveDataPaths, ensureDataDirs } from '@main/paths'
-import { createTestCtx, tempFile } from '../helpers/ctx'
+import { gzipSync } from 'node:zlib'
+import { createCompany } from '@server/services/companies'
+import { createProject } from '@server/services/projects'
+import { getBoard } from '@server/services/boards'
+import { createTask } from '@server/services/tasks'
+import { addAttachments, deleteAttachment } from '@server/services/attachments'
+import { createBackup, inspectBackup, restoreBackup, listAutoBackups } from '@server/services/backup'
+import { compareDatasets, exportDataset, importDataset } from '@server/services/dataset'
+import { LATEST_SCHEMA_VERSION } from '@server/db/migrate'
+import { createTestCtx, tempUpload } from '../helpers/ctx'
 
-let T: ReturnType<typeof createTestCtx>
-beforeEach(() => { T = createTestCtx() })
+let T: Awaited<ReturnType<typeof createTestCtx>>
+beforeEach(async () => { T = await createTestCtx() })
 afterEach(() => T.cleanup())
 
-const sha = (f: string) => createHash('sha256').update(readFileSync(f)).digest('hex')
+const snapshot = () => exportDataset(T.ctx.db, T.ctx.now())
 
-function seed() {
-  createCompany(T.ctx, { name: 'Empresa Backup', color: '#f00' })
-  const p = createProject(T.ctx, { companyId: 1, folderId: null, name: 'P', color: '#000' })
-  const boardId = (T.ctx.db.prepare('SELECT id FROM boards WHERE project_id = ?').get(p.id) as { id: number }).id
-  const t = createTask(T.ctx, { columnId: getBoard(T.ctx, boardId, {}).columns[0].id, title: 'T' })
-  const [a] = addAttachments(T.ctx, { taskId: t.id, sourcePaths: [tempFile('doc.txt', 'conteúdo do anexo')] })
-  return { a }
+async function seed() {
+  await createCompany(T.ctx, { name: 'Empresa Backup', color: '#f00' })
+  const p = await createProject(T.ctx, { companyId: 1, folderId: null, name: 'P', color: '#000' })
+  const boardId = (await T.ctx.db.one<{ id: number }>('SELECT id FROM boards WHERE project_id = ?', [p.id]))!.id
+  const t = await createTask(T.ctx, { columnId: (await getBoard(T.ctx, boardId, {})).columns[0].id, title: 'T' })
+  const [a] = await addAttachments(T.ctx, { taskId: t.id, uploads: [await tempUpload(T.ctx.storage, 'doc.txt', 'conteúdo do anexo')] })
+  return { a, t }
 }
 
-async function zipOf(entries: Record<string, string | Buffer>): Promise<string> {
-  const dest = join(mkdtempSync(join(tmpdir(), 'pth-zip-')), 'x.zip')
-  const out = createWriteStream(dest)
-  const arc = archiver('zip')
-  arc.pipe(out)
-  for (const [name, data] of Object.entries(entries)) arc.append(data, { name })
-  await arc.finalize()
-  await once(out, 'close')
-  return dest
+/** Puts raw bytes where a browser upload of a backup file would land. */
+async function uploaded(data: string | Uint8Array): Promise<string> {
+  return (await tempUpload(T.ctx.storage, 'backup.json.gz', data)).key
 }
 
-test('backup completo: roundtrip em outra pasta de dados, com anexos', async () => {
-  const { a } = seed()
-  const dir = join(mkdtempSync(join(tmpdir(), 'pth-bk-')), "it's dir")
-  const zip = join(dir, 'backup.zip')
-  const m = await createFullBackup(T.ctx, zip, '1.0.0')
-  expect(m).toMatchObject({ app: 'personal-task-hub', kind: 'full', schemaVersion: LATEST_SCHEMA_VERSION, counts: { companies: 2, projects: 1, tasks: 1, attachments: 1 } })
-  expect(existsSync(zip)).toBe(true)
-  expect(existsSync(`${zip}.part`)).toBe(false)
+test('backup completo: roundtrip devolve contagens e linhas idênticas, com anexos', async () => {
+  const { a } = await seed()
+  const before = await snapshot()
+  const { key, manifest: m } = await createBackup(T.ctx, 'manual')
+  expect(key).toMatch(/^backups\/manual\/hub-2026-11-25_120000\.json\.gz$/)
+  expect(m).toMatchObject({ app: 'personal-task-hub', schemaVersion: LATEST_SCHEMA_VERSION })
+  expect(m.counts).toMatchObject({ companies: 2, projects: 1, tasks: 1, attachments: 1 })
 
-  // restore into a fresh data dir
-  const other = resolveDataPaths(mkdtempSync(join(tmpdir(), 'pth-other-')))
-  ensureDataDirs(other)
-  const ctx2 = { db: openDatabase(other.dbFile), paths: other, now: () => new Date() }
-  const { manifest, stagingDir } = await inspectBackup(ctx2, zip)
-  expect(manifest.counts.tasks).toBe(1)
-  ctx2.db.close()
-  applyRestore(other, stagingDir, new Date())
-  const db = openDatabase(other.dbFile)
-  expect(db.prepare("SELECT count(*) n FROM companies WHERE name = 'Empresa Backup'").get()).toEqual({ n: 1 })
-  db.close()
-  expect(readFileSync(join(other.attachments, a.storedPath), 'utf8')).toBe('conteúdo do anexo')
-  expect(readdirSync(other.backupsPreRestore)).toHaveLength(1)
+  // change everything that matters, then restore
+  await T.ctx.db.run("DELETE FROM companies WHERE name = 'Empresa Backup'")
+  await deleteAttachment(T.ctx, a.id)
+  expect((await inspectBackup(T.ctx, key)).counts.tasks).toBe(1)
+  await restoreBackup(T.ctx, key)
+  expect(compareDatasets(before, await snapshot())).toEqual([])
+  expect(new TextDecoder().decode(await T.ctx.storage.get(`attachments/${a.storedPath}`))).toBe('conteúdo do anexo')
+  expect(await listAutoBackups(T.ctx)).toHaveLength(1) // safety copy of the data that was replaced
 })
 
-test('backup só do banco mantém attachments atuais na restauração', async () => {
-  seed()
-  const file = join(mkdtempSync(join(tmpdir(), 'pth-bkdb-')), 'hub.db')
-  expect(createDbBackup(T.ctx, file, '1.0.0').kind).toBe('db')
-  T.ctx.db.exec("DELETE FROM companies WHERE name = 'Empresa Backup'")
-  const { stagingDir } = await inspectBackup(T.ctx, file)
-  const att = T.ctx.db.prepare('SELECT id FROM attachments').get() as { id: number }
-  const attPath = getAttachmentAbsPath(T.ctx, att.id)
-  T.ctx.db.close()
-  applyRestore(T.ctx.paths, stagingDir, new Date())
-  const db = openDatabase(T.ctx.paths.dbFile)
-  expect(db.prepare("SELECT count(*) n FROM companies WHERE name = 'Empresa Backup'").get()).toEqual({ n: 1 })
-  db.close()
-  expect(existsSync(attPath)).toBe(true)
+test('restauração mantém os anexos atuais no Storage', async () => {
+  const { t } = await seed()
+  const { key } = await createBackup(T.ctx, 'manual')
+  const [extra] = await addAttachments(T.ctx, { taskId: t.id, uploads: [await tempUpload(T.ctx.storage, 'novo.txt', 'novo')] })
+  await T.ctx.db.run("DELETE FROM companies WHERE name = 'Empresa Backup'")
+  await restoreBackup(T.ctx, await uploaded(await T.ctx.storage.get(key)))
+  expect(await T.ctx.db.one("SELECT count(*) n FROM companies WHERE name = 'Empresa Backup'")).toEqual({ n: 1 })
+  expect(await T.ctx.storage.exists(`attachments/${extra.storedPath}`)).toBe(true)
+})
+
+test('importDataset sem replace num banco com dados lança CONFLICT', async () => {
+  await seed()
+  const ds = await snapshot()
+  await expect(importDataset(T.ctx.db, ds, { replace: false })).rejects.toMatchObject({ code: 'CONFLICT' })
 })
 
 describe('backups inválidos são rejeitados sem tocar nos dados atuais', () => {
-  const cases: [string, () => Promise<string>][] = [
-    ['zip corrompido', async () => { const f = join(mkdtempSync(join(tmpdir(), 'pth-bad-')), 'x.zip'); writeFileSync(f, 'isto não é zip'); return f }],
-    ['zip sem manifest', () => zipOf({ 'hub.db': 'x' })],
-    ['manifest de outro app', () => zipOf({ 'manifest.json': JSON.stringify({ app: 'outro' }), 'hub.db': 'x' })],
+  const json = (o: unknown) => gzipSync(Buffer.from(JSON.stringify(o)))
+  const cases: [string, () => Promise<Uint8Array | string>][] = [
+    ['gzip corrompido', async () => new Uint8Array([0x1f, 0x8b, 1, 2, 3, 4, 5])],
+    ['json sem manifesto', async () => json({ tables: {} })],
+    ['manifesto de outro app', async () => json({ manifest: { app: 'outro', schemaVersion: 1 }, tables: {} })],
     ['schema mais novo', async () => {
-      const f = join(mkdtempSync(join(tmpdir(), 'pth-new-')), 'hub.db')
-      createDbBackup(T.ctx, f, '1')
-      const db = openDatabase(f); db.pragma(`user_version = ${LATEST_SCHEMA_VERSION + 1}`); db.close()
-      return f
+      const ds = await snapshot()
+      return json({ ...ds, manifest: { ...ds.manifest, schemaVersion: LATEST_SCHEMA_VERSION + 1 } })
     }],
-    ['banco que não é SQLite', async () => { const f = join(mkdtempSync(join(tmpdir(), 'pth-nodb-')), 'hub.db'); writeFileSync(f, Buffer.alloc(8192, 7)); return f }]
+    ['arquivo que não é JSON', async () => new Uint8Array(8192).fill(7)]
   ]
   for (const [name, make] of cases) {
     test(name, async () => {
-      seed()
-      T.ctx.db.pragma('wal_checkpoint(TRUNCATE)')
-      const before = sha(T.ctx.paths.dbFile)
-      const file = await make()
-      await expect(inspectBackup(T.ctx, file)).rejects.toMatchObject({ code: 'INVALID_BACKUP' })
-      expect(sha(T.ctx.paths.dbFile)).toBe(before)
-      expect(readdirSync(T.ctx.paths.restoreStaging)).toEqual([])
+      await seed()
+      const before = await snapshot()
+      const key = await uploaded(await make())
+      await expect(inspectBackup(T.ctx, key)).rejects.toMatchObject({ code: 'INVALID_BACKUP' })
+      await expect(restoreBackup(T.ctx, key)).rejects.toMatchObject({ code: 'INVALID_BACKUP' })
+      expect(compareDatasets(before, await snapshot())).toEqual([])
+      expect(await listAutoBackups(T.ctx)).toEqual([])
     })
   }
 })
-
-void mkdirSync

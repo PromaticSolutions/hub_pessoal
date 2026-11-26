@@ -1,4 +1,5 @@
-import type { Company } from '@shared/types'
+import { randomUUID } from 'node:crypto'
+import type { Company, UploadRef } from '@shared/types'
 import { toLocalMinute } from '@shared/dates'
 import type { AppContext } from '../context'
 import { withTx } from '../db/tx'
@@ -6,7 +7,7 @@ import { AppError } from '../lib/errors'
 import { camel, insertId, must, requireName } from '../lib/rows'
 import { logActivity } from '../lib/activity'
 import { positionForInsert } from '../lib/position'
-import { collectAttachmentPaths, moveToDeleted } from './attachments'
+import { checkUpload, collectAttachmentPaths, moveToDeleted } from './attachments'
 
 export type CompanySummary = Company & { activeProjects: number; openTasks: number; overdueTasks: number }
 
@@ -61,9 +62,24 @@ export async function updateCompany(ctx: AppContext, id: number, patch: { name?:
   return getCompany(ctx, id)
 }
 
-// Task 5: logos move to Storage.
-export async function setCompanyLogo(_ctx: AppContext, _id: number, _sourcePath: string | null): Promise<Company> {
-  throw new AppError('INTERNAL', 'pendente')
+/** Moves an uploaded image to `logos/<id>-<uuid><ext>` (or clears the logo) and removes the previous file. */
+export async function setCompanyLogo(ctx: AppContext, id: number, upload: UploadRef | null): Promise<Company> {
+  const cur = await getCompany(ctx, id)
+  let key: string | null = null
+  if (upload) {
+    await checkUpload(ctx.storage, upload)
+    const ext = /\.[a-z0-9]{1,8}$/i.exec(upload.name)?.[0].toLowerCase() ?? ''
+    key = `logos/${id}-${randomUUID()}${ext}`
+    await ctx.storage.move(upload.key, key)
+  }
+  try {
+    await ctx.db.run('UPDATE companies SET logo_path = ?, updated_at = iso_now() WHERE id = ?', [key, id])
+  } catch (e) {
+    if (key) await ctx.storage.remove([key]).catch(() => undefined)
+    throw e
+  }
+  if (cur.logoPath && cur.logoPath !== key) await ctx.storage.remove([cur.logoPath])
+  return getCompany(ctx, id)
 }
 
 function assertNotPersonal(c: Company, what: string) {
@@ -102,7 +118,7 @@ export async function deleteCompany(ctx: AppContext, id: number): Promise<void> 
     await tx.db.run('DELETE FROM companies WHERE id = ?', [id])
     await logActivity(tx.db, { entityType: 'company', entityId: id, action: 'deleted', oldValue: c.name })
   })
-  for (const f of files) await moveToDeleted(ctx.storage, f)
+  for (const f of files) await moveToDeleted(ctx, f)
   if (c.logoPath) await ctx.storage.remove([c.logoPath])
 }
 
@@ -112,7 +128,8 @@ export async function reorderCompany(ctx: AppContext, id: number, where: { befor
   await ctx.db.run('UPDATE companies SET position = ? WHERE id = ?', [pos, id])
 }
 
-/** Logo as data URL. Task 5: read from Storage. */
-export async function getCompanyLogoDataUrl(_ctx: AppContext, _id: number): Promise<string | null> {
-  throw new AppError('INTERNAL', 'pendente')
+/** Signed URL (1 h) of the company logo, or null when it has none. */
+export async function getCompanyLogoUrl(ctx: AppContext, id: number): Promise<string | null> {
+  const c = await getCompany(ctx, id)
+  return c.logoPath ? ctx.storage.signedUrl(c.logoPath) : null
 }

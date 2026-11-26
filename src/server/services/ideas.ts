@@ -132,7 +132,7 @@ export async function deleteIdea(ctx: AppContext, id: number): Promise<void> {
   await row(ctx, id)
   const files = await collectAttachmentPaths(ctx.db, 'a.idea_id = ?', [id])
   await ctx.db.run('DELETE FROM ideas WHERE id = ?', [id])
-  for (const f of files) await moveToDeleted(ctx.storage, f)
+  for (const f of files) await moveToDeleted(ctx, f)
 }
 
 async function markDeveloping(ctx: AppContext, i: Idea) {
@@ -142,29 +142,37 @@ async function markDeveloping(ctx: AppContext, i: Idea) {
 export async function convertIdeaToTask(ctx: AppContext, input: { id: number; projectId: number }): Promise<Task> {
   const idea = await getIdea(ctx, input.id)
   if (idea.convertedTaskId != null) throw new AppError('CONFLICT', 'Esta ideia já foi transformada em tarefa.')
-  return withTx(ctx, async (tx) => {
-    const t = await quickCreateTask(tx, { projectId: input.projectId, title: idea.title, priority: idea.priority })
-    if (idea.description) await updateTask(tx, t.id, { description: idea.description })
-    if (idea.labels.length) await setTaskLabels(tx, t.id, idea.labels.map((l) => l.id))
-    await tx.db.run('UPDATE ideas SET converted_task_id = ?, updated_at = iso_now() WHERE id = ?', [t.id, idea.id])
-    await markDeveloping(tx, idea)
-    // The idea keeps its files; the task gets its own copies (Storage copy).
-    const now = tx.now()
-    const sub = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
-    for (const a of idea.attachments) {
-      const rel = `${sub}/${randomUUID()}-${sanitize(a.originalName)}`
-      await tx.storage.copy(`attachments/${a.storedPath}`, `attachments/${rel}`)
-      await tx.db.run('INSERT INTO attachments(task_id, original_name, stored_path, mime_type, size_bytes) VALUES (?, ?, ?, ?, ?)', [
-        t.id,
-        a.originalName,
-        rel,
-        a.mimeType,
-        a.sizeBytes
-      ])
-      await logActivity(tx.db, { entityType: 'task', entityId: t.id, taskId: t.id, action: 'attachment_added', newValue: a.originalName })
-    }
-    return t
-  })
+  const copied: string[] = []
+  try {
+    return await withTx(ctx, async (tx) => {
+      const t = await quickCreateTask(tx, { projectId: input.projectId, title: idea.title, priority: idea.priority })
+      if (idea.description) await updateTask(tx, t.id, { description: idea.description })
+      if (idea.labels.length) await setTaskLabels(tx, t.id, idea.labels.map((l) => l.id))
+      await tx.db.run('UPDATE ideas SET converted_task_id = ?, updated_at = iso_now() WHERE id = ?', [t.id, idea.id])
+      await markDeveloping(tx, idea)
+      // The idea keeps its files; the task gets its own copies (Storage copy).
+      const now = tx.now()
+      const sub = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
+      for (const a of idea.attachments) {
+        const rel = `${sub}/${randomUUID()}-${sanitize(a.originalName)}`
+        await tx.storage.copy(`attachments/${a.storedPath}`, `attachments/${rel}`)
+        copied.push(`attachments/${rel}`)
+        await tx.db.run('INSERT INTO attachments(task_id, original_name, stored_path, mime_type, size_bytes) VALUES (?, ?, ?, ?, ?)', [
+          t.id,
+          a.originalName,
+          rel,
+          a.mimeType,
+          a.sizeBytes
+        ])
+        await logActivity(tx.db, { entityType: 'task', entityId: t.id, taskId: t.id, action: 'attachment_added', newValue: a.originalName })
+      }
+      return t
+    })
+  } catch (e) {
+    // The transaction rolled back: drop the copies it made so no orphan files remain.
+    if (copied.length) await ctx.storage.remove(copied).catch(() => undefined)
+    throw e
+  }
 }
 
 export async function convertIdeaToProject(ctx: AppContext, input: { id: number; companyId: number; folderId: number | null }): Promise<Project> {
