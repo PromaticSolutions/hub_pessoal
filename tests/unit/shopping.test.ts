@@ -1,8 +1,8 @@
 import { parseMoneyToCents, formatBRL, parseQuantity, parseQuickAdd } from '@shared/money'
-import { listShopping, shoppingTotals, createShoppingItem, quickAddShopping, updateShoppingItem, setBought, deleteShoppingItem, listShoppingCategories } from '@main/services/shopping'
+import { listShopping, shoppingTotals, createShoppingItem, quickAddShopping, updateShoppingItem, setBought, deleteShoppingItem, listShoppingCategories } from '@server/services/shopping'
 import { createTestCtx } from '../helpers/ctx'
 
-test('dinheiro e quantidade em formato brasileiro', () => {
+test('dinheiro e quantidade em formato brasileiro', async () => {
   expect(parseMoneyToCents('12,50')).toBe(1250)
   expect(parseMoneyToCents('1.234,56')).toBe(123456)
   expect(parseMoneyToCents('R$ 9,9')).toBe(990)
@@ -16,7 +16,7 @@ test('dinheiro e quantidade em formato brasileiro', () => {
   expect(parseQuantity('')).toBe(1)
 })
 
-test('adição rápida', () => {
+test('adição rápida', async () => {
   expect(parseQuickAdd('Café 2')).toEqual({ name: 'Café', quantity: 2 })
   expect(parseQuickAdd('Leite 1,5')).toEqual({ name: 'Leite', quantity: 1.5 })
   expect(parseQuickAdd('Pão')).toEqual({ name: 'Pão', quantity: 1 })
@@ -24,28 +24,28 @@ test('adição rápida', () => {
   expect(parseQuickAdd('  Papel  toalha  3 ')).toEqual({ name: 'Papel toalha', quantity: 3 })
 })
 
-test('CRUD, filtros, comprado e totais', () => {
-  const T = createTestCtx(new Date(2026, 10, 25, 12))
-  const cafe = quickAddShopping(T.ctx, 'Café 2')
-  updateShoppingItem(T.ctx, cafe.id, { priceCents: 1250, category: 'Mercado' })
-  createShoppingItem(T.ctx, { name: 'Detergente', quantity: 1.5, priceCents: 399, category: 'Limpeza', priority: 'high' })
-  createShoppingItem(T.ctx, { name: 'Fone', category: 'Eletrônicos', url: 'https://exemplo.com/fone' })
-  expect(() => createShoppingItem(T.ctx, { name: ' ' })).toThrow(expect.objectContaining({ code: 'VALIDATION' }))
-  expect(() => createShoppingItem(T.ctx, { name: 'x', quantity: 0 })).toThrow(expect.objectContaining({ code: 'VALIDATION' }))
-  expect(shoppingTotals(T.ctx)).toMatchObject({ pendingCents: 2500 + 599, pendingWithoutPrice: 1, boughtThisMonthCents: 0 })
-  expect(listShopping(T.ctx, { status: 'pending' }).map((i) => i.name)).toEqual(['Detergente', 'Café', 'Fone'])
-  setBought(T.ctx, cafe.id, true)
-  expect(listShopping(T.ctx, { status: 'pending' }).map((i) => i.name)).toEqual(['Detergente', 'Fone'])
-  expect(listShopping(T.ctx, { status: 'bought' })[0]).toMatchObject({ name: 'Café', status: 'bought' })
-  expect(shoppingTotals(T.ctx)).toMatchObject({ pendingCents: 599, boughtThisMonthCents: 2500 })
-  expect(shoppingTotals(T.ctx).byCategory.find((c) => c.category === 'Mercado')).toMatchObject({ pendingCents: 0, boughtMonthCents: 2500 })
+test('CRUD, filtros, comprado e totais', async () => {
+  const T = await createTestCtx(new Date(2026, 10, 25, 12))
+  const cafe = await quickAddShopping(T.ctx, 'Café 2')
+  await updateShoppingItem(T.ctx, cafe.id, { priceCents: 1250, category: 'Mercado' })
+  await createShoppingItem(T.ctx, { name: 'Detergente', quantity: 1.5, priceCents: 399, category: 'Limpeza', priority: 'high' })
+  await createShoppingItem(T.ctx, { name: 'Fone', category: 'Eletrônicos', url: 'https://exemplo.com/fone' })
+  await expect(createShoppingItem(T.ctx, { name: ' ' })).rejects.toMatchObject({ code: 'VALIDATION' })
+  await expect(createShoppingItem(T.ctx, { name: 'x', quantity: 0 })).rejects.toMatchObject({ code: 'VALIDATION' })
+  expect(await shoppingTotals(T.ctx)).toMatchObject({ pendingCents: 2500 + 599, pendingWithoutPrice: 1, boughtThisMonthCents: 0 })
+  expect((await listShopping(T.ctx, { status: 'pending' })).map((i) => i.name)).toEqual(['Detergente', 'Café', 'Fone'])
+  await setBought(T.ctx, cafe.id, true)
+  expect((await listShopping(T.ctx, { status: 'pending' })).map((i) => i.name)).toEqual(['Detergente', 'Fone'])
+  expect((await listShopping(T.ctx, { status: 'bought' }))[0]).toMatchObject({ name: 'Café', status: 'bought' })
+  expect(await shoppingTotals(T.ctx)).toMatchObject({ pendingCents: 599, boughtThisMonthCents: 2500 })
+  expect((await shoppingTotals(T.ctx)).byCategory.find((c) => c.category === 'Mercado')).toMatchObject({ pendingCents: 0, boughtMonthCents: 2500 })
   T.setNow(new Date(2026, 11, 2, 12))
-  expect(shoppingTotals(T.ctx).boughtThisMonthCents).toBe(0)
-  setBought(T.ctx, cafe.id, false)
-  expect(listShopping(T.ctx, { status: 'pending' })).toHaveLength(3)
-  expect(listShopping(T.ctx, { status: 'all', category: 'Limpeza' }).map((i) => i.name)).toEqual(['Detergente'])
-  expect(listShoppingCategories(T.ctx)).toEqual(['Eletrônicos', 'Limpeza', 'Mercado'])
-  deleteShoppingItem(T.ctx, cafe.id)
-  expect(listShopping(T.ctx, { status: 'all' })).toHaveLength(2)
-  T.cleanup()
+  expect((await shoppingTotals(T.ctx)).boughtThisMonthCents).toBe(0)
+  await setBought(T.ctx, cafe.id, false)
+  expect(await listShopping(T.ctx, { status: 'pending' })).toHaveLength(3)
+  expect((await listShopping(T.ctx, { status: 'all', category: 'Limpeza' })).map((i) => i.name)).toEqual(['Detergente'])
+  expect(await listShoppingCategories(T.ctx)).toEqual(['Eletrônicos', 'Limpeza', 'Mercado'])
+  await deleteShoppingItem(T.ctx, cafe.id)
+  expect(await listShopping(T.ctx, { status: 'all' })).toHaveLength(2)
+  await T.cleanup()
 })

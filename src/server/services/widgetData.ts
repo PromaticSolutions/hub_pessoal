@@ -22,44 +22,48 @@ function resolveScope(config: WidgetConfig, dashboardScope: DashboardScope): Das
   return config.source?.kind === 'scope' ? config.source.scope : dashboardScope
 }
 
-function metricValue(ctx: AppContext, metric: KpiMetric, scope: DashboardScope, cache: { d?: ReturnType<typeof getDashboard>; s?: ReturnType<typeof shoppingTotals> }): { value: number; format: 'int' | 'brl' } {
+type Cache = { d?: ReturnType<typeof getDashboard>; s?: ReturnType<typeof shoppingTotals> }
+
+async function metricValue(ctx: AppContext, metric: KpiMetric, scope: DashboardScope, cache: Cache): Promise<{ value: number; format: 'int' | 'brl' }> {
   switch (metric) {
     case 'shoppingPending':
-      return { value: (cache.s ??= shoppingTotals(ctx)).pendingCents, format: 'brl' }
+      return { value: (await (cache.s ??= shoppingTotals(ctx))).pendingCents, format: 'brl' }
     case 'shoppingMonth':
-      return { value: (cache.s ??= shoppingTotals(ctx)).boughtThisMonthCents, format: 'brl' }
+      return { value: (await (cache.s ??= shoppingTotals(ctx))).boughtThisMonthCents, format: 'brl' }
     case 'ideasNew':
-      return { value: (ctx.db.prepare("SELECT count(*) n FROM ideas WHERE status = 'new'").get() as { n: number }).n, format: 'int' }
+      return { value: (await ctx.db.one<{ n: number }>("SELECT count(*) n FROM ideas WHERE status = 'new'"))!.n, format: 'int' }
     case 'dayBlocks':
-      return { value: (ctx.db.prepare('SELECT count(*) n FROM day_blocks WHERE date = ?').get(toLocalDate(ctx.now())) as { n: number }).n, format: 'int' }
+      return { value: (await ctx.db.one<{ n: number }>('SELECT count(*) n FROM day_blocks WHERE date = ?', [toLocalDate(ctx.now())]))!.n, format: 'int' }
     default:
-      return { value: (cache.d ??= getDashboard(ctx, { scope })).kpis[metric], format: 'int' }
+      return { value: (await (cache.d ??= getDashboard(ctx, { scope }))).kpis[metric], format: 'int' }
   }
 }
 
 const weekLabel = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 
-export function getWidgetData(ctx: AppContext, input: { widget: { type: WidgetType; config: WidgetConfig }; dashboardScope: DashboardScope }): WidgetData {
+export async function getWidgetData(ctx: AppContext, input: { widget: { type: WidgetType; config: WidgetConfig }; dashboardScope: DashboardScope }): Promise<WidgetData> {
   const { type, config } = input.widget
   const scope = resolveScope(config, input.dashboardScope)
-  const cache: { d?: ReturnType<typeof getDashboard>; s?: ReturnType<typeof shoppingTotals> } = {}
+  const cache: Cache = {}
   const dash = () => (cache.d ??= getDashboard(ctx, { scope }))
 
   switch (type) {
     case 'kpi': {
-      const v = metricValue(ctx, config.metric ?? 'total', scope, cache)
+      const v = await metricValue(ctx, config.metric ?? 'total', scope, cache)
       return { kind: 'kpi', ...v }
     }
     case 'summary': {
       const metrics = config.metrics?.length ? config.metrics : (['todo', 'inProgress', 'done', 'overdue'] as KpiMetric[])
-      return { kind: 'summary', items: metrics.map((metric) => ({ metric, label: KPI_LABELS[metric], ...metricValue(ctx, metric, scope, cache) })) }
+      const items = []
+      for (const metric of metrics) items.push({ metric, label: KPI_LABELS[metric], ...(await metricValue(ctx, metric, scope, cache)) })
+      return { kind: 'summary', items }
     }
     case 'chart': {
       const data = config.data ?? 'byPriority'
       if (data === 'byPriority')
-        return { kind: 'chart', format: 'int', series: [{ key: 'value', label: 'Tarefas' }], rows: dash().byPriority.map((p) => ({ key: p.priority, label: PRIORITY_LABELS[p.priority], value: p.count, color: PRIORITY_COLORS_SEQ[p.priority] })) }
+        return { kind: 'chart', format: 'int', series: [{ key: 'value', label: 'Tarefas' }], rows: (await dash()).byPriority.map((p) => ({ key: p.priority, label: PRIORITY_LABELS[p.priority], value: p.count, color: PRIORITY_COLORS_SEQ[p.priority] })) }
       if (data === 'byStatus') {
-        const k = dash().kpis
+        const k = (await dash()).kpis
         return {
           kind: 'chart',
           format: 'int',
@@ -76,11 +80,11 @@ export function getWidgetData(ctx: AppContext, input: { widget: { type: WidgetTy
           kind: 'chart',
           format: 'int',
           series: [...PRIORITIES].reverse().map((p) => ({ key: p, label: PRIORITY_LABELS[p], color: PRIORITY_COLORS_SEQ[p] })),
-          rows: dash().byCompany.map((c) => ({ key: String(c.companyId), label: c.name, color: c.color, low: c.low, medium: c.medium, high: c.high, urgent: c.urgent, value: c.low + c.medium + c.high + c.urgent }))
+          rows: (await dash()).byCompany.map((c) => ({ key: String(c.companyId), label: c.name, color: c.color, low: c.low, medium: c.medium, high: c.high, urgent: c.urgent, value: c.low + c.medium + c.high + c.urgent }))
         }
       if (data === 'byProject') {
         const map = new Map<number, { key: string; label: string; color: string; value: number }>()
-        for (const t of queryTasks(ctx, { filter: { ...scopeFilter(scope), includeDone: false }, sort: 'due' })) {
+        for (const t of await queryTasks(ctx, { filter: { ...scopeFilter(scope), includeDone: false }, sort: 'due' })) {
           const r = map.get(t.projectId) ?? { key: String(t.projectId), label: t.projectName, color: t.projectColor, value: 0 }
           r.value++
           map.set(t.projectId, r)
@@ -88,15 +92,15 @@ export function getWidgetData(ctx: AppContext, input: { widget: { type: WidgetTy
         return { kind: 'chart', format: 'int', series: [{ key: 'value', label: 'Tarefas abertas' }], rows: [...map.values()].sort((a, b) => b.value - a.value).slice(0, 12) }
       }
       if (data === 'productivity')
-        return { kind: 'chart', format: 'int', series: [{ key: 'value', label: 'Concluídas' }], rows: dash().completedPerWeek.map((w) => ({ key: w.weekStart, label: weekLabel(w.weekStart), value: w.count })) }
+        return { kind: 'chart', format: 'int', series: [{ key: 'value', label: 'Concluídas' }], rows: (await dash()).completedPerWeek.map((w) => ({ key: w.weekStart, label: weekLabel(w.weekStart), value: w.count })) }
       if (data === 'createdVsCompleted')
         return {
           kind: 'chart',
           format: 'int',
           series: [{ key: 'created', label: 'Criadas' }, { key: 'completed', label: 'Concluídas' }],
-          rows: dash().createdVsCompleted.map((w) => ({ key: w.weekStart, label: weekLabel(w.weekStart), created: w.created, completed: w.completed }))
+          rows: (await dash()).createdVsCompleted.map((w) => ({ key: w.weekStart, label: weekLabel(w.weekStart), created: w.created, completed: w.completed }))
         }
-      const s = (cache.s ??= shoppingTotals(ctx))
+      const s = await (cache.s ??= shoppingTotals(ctx))
       return {
         kind: 'chart',
         format: 'brl',
@@ -106,9 +110,9 @@ export function getWidgetData(ctx: AppContext, input: { widget: { type: WidgetTy
     }
     case 'taskList': {
       const limit = config.limit ?? 10
-      if (config.list === 'nearDue') return { kind: 'taskList', items: dash().nearDueList.slice(0, limit) }
-      if (config.list === 'filter') return { kind: 'taskList', items: queryTasks(ctx, { filter: { includeDone: false, ...scopeFilter(scope), ...(config.filter ?? {}) }, sort: 'due', limit }) }
-      return { kind: 'taskList', items: dash().overdueList.slice(0, limit) }
+      if (config.list === 'nearDue') return { kind: 'taskList', items: (await dash()).nearDueList.slice(0, limit) }
+      if (config.list === 'filter') return { kind: 'taskList', items: await queryTasks(ctx, { filter: { includeDone: false, ...scopeFilter(scope), ...(config.filter ?? {}) }, sort: 'due', limit }) }
+      return { kind: 'taskList', items: (await dash()).overdueList.slice(0, limit) }
     }
     case 'projects': {
       const f = scopeFilter(scope)
@@ -119,20 +123,19 @@ export function getWidgetData(ctx: AppContext, input: { widget: { type: WidgetTy
       if (f.companyIds?.length) { w.push('co.id = ?'); params.push(f.companyIds[0]) }
       if (f.projectIds?.length) { w.push('p.id = ?'); params.push(f.projectIds[0]) }
       const now = toLocalMinute(ctx.now())
-      const items = ctx.db
-        .prepare(
+      const items = await ctx.db.many<{ id: number; name: string; color: string; company_name: string; company_color: string; total: number; done: number; overdue: number }>(
           `SELECT p.id, p.name, p.color, co.name AS company_name, co.color AS company_color,
-             (SELECT count(*) FROM v_tasks t WHERE t.project_id = p.id AND NOT t.effective_archived) AS total,
-             (SELECT count(*) FROM v_tasks t WHERE t.project_id = p.id AND NOT t.effective_archived AND t.status = 'done') AS done,
-             (SELECT count(*) FROM v_tasks t WHERE t.project_id = p.id AND NOT t.effective_archived AND t.status <> 'done' AND t.due_end < ?) AS overdue
-           FROM projects p JOIN companies co ON co.id = p.company_id WHERE ${w.join(' AND ')} ORDER BY co.is_personal, co.position, p.position`
+             (SELECT count(*) FROM v_tasks t WHERE t.project_id = p.id AND t.effective_archived = 0) AS total,
+             (SELECT count(*) FROM v_tasks t WHERE t.project_id = p.id AND t.effective_archived = 0 AND t.status = 'done') AS done,
+             (SELECT count(*) FROM v_tasks t WHERE t.project_id = p.id AND t.effective_archived = 0 AND t.status <> 'done' AND t.due_end < ?) AS overdue
+           FROM projects p JOIN companies co ON co.id = p.company_id WHERE ${w.join(' AND ')} ORDER BY co.is_personal, co.position, p.position`,
+          [now, ...params]
         )
-        .all(now, ...params) as { id: number; name: string; color: string; company_name: string; company_color: string; total: number; done: number; overdue: number }[]
       return { kind: 'projects', items: items.map((r) => ({ id: r.id, name: r.name, color: r.color, companyName: r.company_name, companyColor: r.company_color, total: r.total, done: r.done, overdue: r.overdue })) }
     }
     case 'shopping': {
-      const s = (cache.s ??= shoppingTotals(ctx))
-      return { kind: 'shopping', pendingCents: s.pendingCents, pendingWithoutPrice: s.pendingWithoutPrice, items: listShopping(ctx, { status: 'pending' }).slice(0, config.limit ?? 12) }
+      const s = await (cache.s ??= shoppingTotals(ctx))
+      return { kind: 'shopping', pendingCents: s.pendingCents, pendingWithoutPrice: s.pendingWithoutPrice, items: (await listShopping(ctx, { status: 'pending' })).slice(0, config.limit ?? 12) }
     }
   }
 }
