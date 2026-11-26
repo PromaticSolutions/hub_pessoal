@@ -29,6 +29,11 @@ export const SPACE_COLORS = [
   '#F97316', '#EF4444', '#EC4899', '#8B5CF6', '#64748B'
 ]
 
+export const SOFT_COLORS = [
+  '#64748B', '#6366F1', '#0EA5E9', '#14B8A6', '#10B981', '#84CC16',
+  '#EAB308', '#F59E0B', '#F97316', '#EF4444', '#EC4899', '#A855F7'
+]
+
 export const SETTINGS_DEFAULTS = {
   theme: 'system' as 'system' | 'light' | 'dark',
   nearDueDays: 7,

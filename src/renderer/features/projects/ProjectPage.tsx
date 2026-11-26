@@ -10,6 +10,8 @@ import { useDialogs } from '../companies/dialogs'
 import { useTabs } from '../../app/tabs-context'
 import { BoardView } from '../board/BoardView'
 import { ProjectFiles } from '../files/ProjectFiles'
+import { ColorDialog } from '../../components/ColorChoice'
+import type { Board } from '@shared/types'
 
 export default function ProjectPage() {
   const params = useParams()
@@ -18,6 +20,7 @@ export default function ProjectPage() {
   const nav = useNavigate()
   const [tab, setTab] = useState<'boards' | 'files' | 'about'>('boards')
   const [showArchivedBoards, setShowArchivedBoards] = useState(false)
+  const [coloringBoard, setColoringBoard] = useState<Board | null>(null)
   const { data: project, error } = useApiQuery('projects.get', { id: projectId })
   const { data: allBoards } = useApiQuery('boards.list', { projectId, includeArchived: true })
   const call = useCall()
@@ -99,13 +102,15 @@ export default function ProjectPage() {
           <div className="flex flex-wrap items-center gap-1 px-6 py-3">
             {boards.map((b) => (
               <div key={b.id} className={cx('group flex items-center rounded-md text-sm', b.id === activeBoard?.id ? 'surface font-semibold' : 'hover:bg-white/70 dark:hover:bg-zinc-900')}>
-                <button data-testid={`board-tab-${b.id}`} className={cx('px-3 py-1', b.archivedAt && 'italic text-zinc-400')} onClick={() => nav(`/projects/${projectId}/boards/${b.id}`)}>
+                <button data-testid={`board-tab-${b.id}`} className={cx('flex items-center gap-1.5 px-3 py-1', b.archivedAt && 'italic text-zinc-400')} onClick={() => nav(`/projects/${projectId}/boards/${b.id}`)}>
+                  {b.color && <span className="h-2 w-2 rounded-[2px]" style={{ background: b.color }} />}
                   {b.name}
                 </button>
                 <Menu
                   trigger={<button className="invisible pr-1 group-hover:visible"><MoreHorizontal size={14} /></button>}
                   items={[
                     { label: 'Abrir em nova aba', onClick: () => tabs.open(`/projects/${projectId}/boards/${b.id}`) },
+                    { label: 'Cor do quadro…', testId: `board-color-${b.id}`, onClick: () => setColoringBoard(b) },
                     { label: 'Renomear', onClick: async () => { const n = await prompt({ title: 'Renomear quadro', initial: b.name }); if (n) call('boards.update', { id: b.id, name: n }) } },
                     { label: 'Mover para a esquerda', onClick: () => { const i = boards.indexOf(b); if (i > 0) call('boards.reorder', { id: b.id, beforeId: boards[i - 2]?.id ?? null, afterId: boards[i - 1].id }) } },
                     { label: 'Mover para a direita', onClick: () => { const i = boards.indexOf(b); if (i < boards.length - 1) call('boards.reorder', { id: b.id, beforeId: boards[i + 1].id, afterId: boards[i + 2]?.id ?? null }) } },
@@ -137,6 +142,7 @@ export default function ProjectPage() {
       )}
 
       {tab === 'files' && <ProjectFiles projectId={projectId} />}
+      <ColorDialog open={!!coloringBoard} title={`Cor do quadro "${coloringBoard?.name ?? ''}"`} value={coloringBoard?.color ?? null} onPick={(c) => coloringBoard && call('boards.update', { id: coloringBoard.id, color: c })} onClose={() => setColoringBoard(null)} />
 
       {tab === 'about' && (
         <div className="max-w-2xl space-y-4 overflow-y-auto p-6 text-sm">

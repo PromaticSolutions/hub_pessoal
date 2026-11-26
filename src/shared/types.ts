@@ -49,6 +49,7 @@ export type Board = {
   id: number
   projectId: number
   name: string
+  color: string | null
   position: number
   archivedAt: string | null
   createdAt: string
@@ -59,6 +60,7 @@ export type Column = {
   id: number
   boardId: number
   name: string
+  color: string | null
   position: number
   category: ColumnCategory
   createdAt: string
@@ -77,6 +79,7 @@ export type Task = {
   completedAt: string | null
   archivedAt: string | null
   position: number
+  color: string | null
   createdAt: string
   updatedAt: string
 }
@@ -132,6 +135,7 @@ export type CardSummary = {
   archivedAt: string | null
   completedAt: string | null
   createdAt: string
+  color: string | null
   labels: Label[]
   checklistDone: number
   checklistTotal: number

@@ -23,6 +23,7 @@ import { api } from '../../lib/api'
 import { cx, formatShort } from '../../lib/format'
 import { useToast } from '../../components/toast'
 import { computeColumnDrop, computeDrop } from './dnd'
+import { ColorDialog, softBg } from '../../components/ColorChoice'
 
 type Filters = { text: string; labelId: number | null; priority: Priority | ''; archived: boolean }
 
@@ -45,6 +46,7 @@ export function TaskCardFace({ card, dragging }: { card: CardSummary; dragging?:
         card.status === 'done' && 'text-zinc-500'
       )}
     >
+      {card.color && <div className="-mx-2.5 -mt-2.5 mb-2 h-[3px] rounded-t-[5px]" style={{ background: card.color }} />}
       {card.labels.length > 0 && (
         <div className="mb-1 flex flex-wrap gap-1">
           {card.labels.map((l) => (
@@ -173,6 +175,7 @@ function BoardColumn({
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(column.name)
   const [deleting, setDeleting] = useState(false)
+  const [coloring, setColoring] = useState(false)
   const call = useCall()
   const openTask = useOpenTask()
   useEffect(() => setName(column.name), [column.name])
@@ -185,7 +188,7 @@ function BoardColumn({
     <div
       ref={setNodeRef}
       data-testid={`column-${column.id}`}
-      style={{ transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      style={{ transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.4 : 1, background: softBg(column.color) }}
       className="lane flex max-h-full w-72 shrink-0 flex-col"
     >
       <div className="flex items-center gap-1 px-2 pt-2" {...attributes} {...listeners}>
@@ -200,7 +203,8 @@ function BoardColumn({
             onPointerDown={(e) => e.stopPropagation()}
           />
         ) : (
-          <div className="flex-1 cursor-grab truncate px-1 text-sm font-semibold" onDoubleClick={() => setEditing(true)} data-testid={`column-title-${column.id}`}>
+          <div className="flex flex-1 cursor-grab items-center gap-1.5 truncate px-1 text-sm font-semibold" onDoubleClick={() => setEditing(true)} data-testid={`column-title-${column.id}`}>
+            {column.color && <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: column.color }} />}
             {column.name} <span className="font-normal text-zinc-400">{cards.length}</span>
           </div>
         )}
@@ -210,6 +214,7 @@ function BoardColumn({
             trigger={<button data-testid={`column-menu-${column.id}`} className="rounded p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800"><MoreHorizontal size={14} /></button>}
             items={[
               { label: 'Renomear', onClick: () => setEditing(true) },
+              { label: 'Cor da coluna…', testId: `column-color-${column.id}`, onClick: () => setColoring(true) },
               ...CATEGORIES.filter((c) => c !== column.category).map((c) => ({ label: `Tipo: ${CATEGORY_LABELS[c]}`, onClick: () => call('columns.update', { id: column.id, category: c as ColumnCategory }) })),
               'separator' as const,
               { label: 'Excluir coluna', danger: true, testId: `column-delete-${column.id}`, onClick: () => setDeleting(true) }
@@ -226,6 +231,7 @@ function BoardColumn({
         <QuickAdd columnId={column.id} open={quickOpen} setOpen={setQuickOpen} />
       </div>
       {deleting && <DeleteColumnDialog column={column} columns={columns} count={cards.length} onClose={() => setDeleting(false)} />}
+      <ColorDialog open={coloring} title={`Cor da coluna "${column.name}"`} value={column.color} onPick={(c) => call('columns.update', { id: column.id, color: c })} onClose={() => setColoring(false)} />
     </div>
   )
 }
@@ -355,6 +361,7 @@ export function BoardView({ boardId }: { boardId: number }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" ref={rootRef} data-testid={`board-${boardId}`}>
+      {data.board.color && <div className="mx-6 mb-2 h-[3px] rounded-full opacity-80" style={{ background: data.board.color }} />}
       <div className="glass mx-6 mb-3 flex flex-wrap items-center gap-2 rounded-md px-3 py-2">
         <Input className="w-56" placeholder="Filtrar cartões…" value={filters.text} onChange={(e) => setFilters({ ...filters, text: e.target.value })} />
         <Select value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value as Priority | '' })}>

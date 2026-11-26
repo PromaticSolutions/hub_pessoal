@@ -28,12 +28,12 @@ export function createColumn(ctx: AppContext, input: { boardId: number; name: st
   return getColumn(ctx, id)
 }
 
-export function updateColumn(ctx: AppContext, id: number, patch: { name?: string; category?: ColumnCategory }): Column {
+export function updateColumn(ctx: AppContext, id: number, patch: { name?: string; category?: ColumnCategory; color?: string | null }): Column {
   const cur = getColumn(ctx, id)
   const name = patch.name !== undefined ? requireName(patch.name) : cur.name
   const category = patch.category ?? cur.category
   ctx.db.transaction(() => {
-    ctx.db.prepare(`UPDATE columns SET name = ?, category = ?, updated_at = ${TS} WHERE id = ?`).run(name, category, id)
+    ctx.db.prepare(`UPDATE columns SET name = ?, category = ?, color = ?, updated_at = ${TS} WHERE id = ?`).run(name, category, patch.color !== undefined ? patch.color : cur.color, id)
     if (category !== cur.category) {
       if (category === 'done') ctx.db.prepare(`UPDATE tasks SET completed_at = coalesce(completed_at, ${TS}) WHERE column_id = ?`).run(id)
       else ctx.db.prepare('UPDATE tasks SET completed_at = NULL WHERE column_id = ?').run(id)

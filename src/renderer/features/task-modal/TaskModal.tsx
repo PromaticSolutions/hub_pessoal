@@ -12,6 +12,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { cx, formatBytes, formatDate } from '../../lib/format'
 import { useToast } from '../../components/toast'
 import { MoveTaskDialog } from './MoveTaskDialog'
+import { ColorChoice } from '../../components/ColorChoice'
 import { flushAll, registerFlusher, track } from '../../lib/flush'
 
 /* ---------- host: opens when ?task=<id> ---------- */
@@ -476,6 +477,10 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
                 <LabelPicker taskId={taskId} selected={t.labels.map((l) => l.id)} />
               </div>
             </Field>
+            <div className="flex flex-col gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              Cor do cartão
+              <ColorChoice value={t.color} testId="task-color" onChange={(c) => update({ color: c })} />
+            </div>
             <Field label="Projeto">
               <div className="space-y-1">
                 <div className="text-sm">{t.project.name} · {t.board.name}</div>

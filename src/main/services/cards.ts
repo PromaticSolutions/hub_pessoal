@@ -5,7 +5,7 @@ import { camel } from '../lib/rows'
 
 /** Columns selected from v_tasks t to build a CardSummary (plus any extra columns). */
 export const CARD_COLS = `t.id, t.board_id, t.column_id, t.title, t.priority, t.due_at, t.start_at, t.position, t.archived_at,
-  t.completed_at, t.created_at, t.status,
+  t.completed_at, t.created_at, t.status, t.color,
   (SELECT count(*) FROM checklist_items i JOIN checklists l ON l.id = i.checklist_id WHERE l.task_id = t.id AND i.done = 1) AS checklist_done,
   (SELECT count(*) FROM checklist_items i JOIN checklists l ON l.id = i.checklist_id WHERE l.task_id = t.id) AS checklist_total,
   (SELECT count(*) FROM comments m WHERE m.task_id = t.id) AS comment_count,

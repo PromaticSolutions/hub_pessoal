@@ -33,9 +33,11 @@ export function listBoards(ctx: AppContext, input: { projectId: number; includeA
   )
 }
 
-export function updateBoard(ctx: AppContext, id: number, patch: { name: string }): Board {
-  getBoardRow(ctx, id)
-  ctx.db.prepare(`UPDATE boards SET name = ?, updated_at = ${TS} WHERE id = ?`).run(requireName(patch.name), id)
+export function updateBoard(ctx: AppContext, id: number, patch: { name?: string; color?: string | null }): Board {
+  const cur = getBoardRow(ctx, id)
+  ctx.db
+    .prepare(`UPDATE boards SET name = ?, color = ?, updated_at = ${TS} WHERE id = ?`)
+    .run(patch.name !== undefined ? requireName(patch.name) : cur.name, patch.color !== undefined ? patch.color : cur.color, id)
   return getBoardRow(ctx, id)
 }
 

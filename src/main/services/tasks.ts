@@ -118,9 +118,10 @@ export function getTask(ctx: AppContext, id: number): TaskDetail {
 export function updateTask(
   ctx: AppContext,
   id: number,
-  patch: Partial<{ title: string; description: string; priority: Priority; startAt: string | null; dueAt: string | null }>
+  patch: Partial<{ title: string; description: string; priority: Priority; startAt: string | null; dueAt: string | null; color: string | null }>
 ): Task {
   const cur = getTaskRow(ctx, id)
+  if (patch.color !== undefined) ctx.db.prepare('UPDATE tasks SET color = ? WHERE id = ?').run(patch.color, id)
   const next = {
     title: patch.title !== undefined ? requireName(patch.title, 'Título') : cur.title,
     description: patch.description ?? cur.description,

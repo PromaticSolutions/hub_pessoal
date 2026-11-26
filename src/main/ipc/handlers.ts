@@ -102,7 +102,7 @@ export const handlers = {
   // boards
   'boards.create': h(z.object({ projectId: zid, name: z.string() }), (c, i) => boards.createBoard(c, i)),
   'boards.list': h(z.object({ projectId: zid, includeArchived: z.boolean().optional() }), (c, i) => boards.listBoards(c, i)),
-  'boards.update': h(z.object({ id: zid, name: z.string() }), (c, { id, ...p }) => boards.updateBoard(c, id, p)),
+  'boards.update': h(z.object({ id: zid, name: z.string().optional(), color: z.string().nullable().optional() }), (c, { id, ...p }) => boards.updateBoard(c, id, p)),
   'boards.reorder': h(z.object({ id: zid, ...between }), (c, { id, ...w }) => boards.reorderBoard(c, id, w)),
   'boards.archive': h(ID, (c, i) => boards.archiveBoard(c, i.id)),
   'boards.restore': h(ID, (c, i) => boards.restoreBoard(c, i.id)),
@@ -110,7 +110,7 @@ export const handlers = {
   'boards.get': h(z.object({ id: zid, includeArchived: z.boolean().optional() }), (c, { id, ...o }) => boards.getBoard(c, id, o)),
   // columns
   'columns.create': h(z.object({ boardId: zid, name: z.string(), category, afterId: zid.nullable().optional() }), (c, i) => columns.createColumn(c, i)),
-  'columns.update': h(z.object({ id: zid, name: z.string().optional(), category: category.optional() }), (c, { id, ...p }) => columns.updateColumn(c, id, p)),
+  'columns.update': h(z.object({ id: zid, name: z.string().optional(), category: category.optional(), color: z.string().nullable().optional() }), (c, { id, ...p }) => columns.updateColumn(c, id, p)),
   'columns.move': h(z.object({ id: zid, ...between }), (c, i) => columns.moveColumn(c, i)),
   'columns.delete': h(z.object({ id: zid, moveTasksTo: zid.nullable() }), (c, i) => columns.deleteColumn(c, i)),
   // tasks (core)
@@ -127,7 +127,7 @@ export const handlers = {
   'labels.delete': h(ID, (c, i) => labels.deleteLabel(c, i.id)),
   'tasks.get': h(ID, (c, i) => tasks.getTask(c, i.id)),
   'tasks.update': h(
-    z.object({ id: zid, title: z.string().optional(), description: z.string().optional(), priority: priority.optional(), startAt: nullableStr, dueAt: nullableStr }),
+    z.object({ id: zid, title: z.string().optional(), description: z.string().optional(), priority: priority.optional(), startAt: nullableStr, dueAt: nullableStr, color: z.string().nullable().optional() }),
     (c, { id, ...p }) => tasks.updateTask(c, id, p)
   ),
   'tasks.duplicate': h(ID, (c, i) => tasks.duplicateTask(c, i.id)),
