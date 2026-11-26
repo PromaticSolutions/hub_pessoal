@@ -9,6 +9,7 @@ test('ideias: criar rápido, editar, anexar, transformar em tarefa e buscar', as
   await page.getByTestId('nav-ideas').click()
   await page.getByTestId('idea-quick').fill('Portal do cliente')
   await page.keyboard.press('Enter')
+  await expect.poll(async () => (await invoke(page, 'ideas.list', {})).length).toBe(1)
   const [idea] = await invoke(page, 'ideas.list', {})
   await page.getByTestId(`idea-card-${idea.id}`).click()
   await expect(page.getByTestId('idea-modal')).toBeVisible()

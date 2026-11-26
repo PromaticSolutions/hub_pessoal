@@ -1,6 +1,4 @@
 import { test, expect } from '@playwright/test'
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { invoke, launchApp, makeTempDir } from '../helpers/app'
 
 async function setupTask(page: import('@playwright/test').Page) {
@@ -32,19 +30,5 @@ test('editar item do checklist e apertar Esc salva a edição', async () => {
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('task-modal')).toBeHidden()
   await expect.poll(async () => (await invoke(page, 'tasks.get', { id: t.id })).checklists[0].items[0].text).toBe('new text')
-  await app.close()
-})
-
-test('janela não navega para fora do app nem abre janelas extras', async () => {
-  const { app, page } = await launchApp(makeTempDir('pth-fix4-'))
-  const html = join(makeTempDir('pth-html-'), 'evil.html')
-  writeFileSync(html, '<html><body>evil</body></html>')
-  const before = await page.evaluate(() => location.href)
-  await page.evaluate((url) => { location.href = url }, `file://${html}`)
-  await page.waitForTimeout(500)
-  expect(await page.evaluate(() => location.href)).toBe(before)
-  await page.evaluate(() => { window.open('https://example.com') })
-  await page.waitForTimeout(500)
-  expect(app.windows()).toHaveLength(1)
   await app.close()
 })

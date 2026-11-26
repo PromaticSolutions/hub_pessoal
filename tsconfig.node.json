@@ -12,5 +12,5 @@
     "paths": { "@shared/*": ["src/shared/*"], "@server/*": ["src/server/*"] },
     "noEmit": true
   },
-  "include": ["src/server/**/*", "src/renderer/env.d.ts", "src/preload/**/*", "scripts/**/*", "src/shared/**/*", "tests/**/*", "*.config.ts", "*.config.mts"]
+  "include": ["src/server/**/*", "src/renderer/env.d.ts", "scripts/**/*", "src/shared/**/*", "tests/**/*", "*.config.ts", "*.config.mts"]
 }
