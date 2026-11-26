@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { invoke, launchApp, makeTempDir } from '../helpers/app'
+import { invoke, launchApp, makeTempDir, pick } from '../helpers/app'
 
 test('modal do card: editar tudo, reiniciar e conferir', async () => {
   const dir = makeTempDir('pth-modal-')
@@ -16,7 +16,7 @@ test('modal do card: editar tudo, reiniciar e conferir', async () => {
 
   await page.getByTestId('task-title').fill('Ler livro de arquitetura')
   await page.getByTestId('task-description').fill('Capítulos **1 a 3**')
-  await page.getByTestId('task-priority').selectOption('high')
+  await pick(page, 'task-priority', 'high')
   await page.getByTestId('task-due').fill('2026-12-05')
   await page.getByTestId('labels-button').click()
   await page.getByTestId('new-label-input').fill('Cliente')

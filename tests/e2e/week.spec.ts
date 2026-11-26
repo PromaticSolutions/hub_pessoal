@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { invoke, launchApp, makeTempDir } from '../helpers/app'
+import { invoke, launchApp, makeTempDir, pick } from '../helpers/app'
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
@@ -14,7 +14,7 @@ test('minha semana mostra hoje, atrasadas, filtra por projeto e cria tarefa', as
   await page.getByTestId('nav-week').click()
   await expect(page.getByTestId(`week-col-${today}`).getByTestId(`week-item-${t1.id}`)).toBeVisible()
   await expect(page.getByTestId('week-col-overdue').getByTestId(`week-item-${t2.id}`)).toBeVisible()
-  await page.getByTestId('filter-project').selectOption(String(a.id))
+  await pick(page, 'filter-project', String(a.id))
   await expect(page.getByTestId(`week-item-${t2.id}`)).toBeHidden()
   await page.getByTestId('week-new-task').click()
   await page.getByTestId('quick-title').fill('Nova pela semana')

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { invoke, launchApp, makeTempDir } from '../helpers/app'
+import { invoke, launchApp, makeTempDir, pick } from '../helpers/app'
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
@@ -38,7 +38,7 @@ test('fluxo completo: empresa → projeto → tarefas → visões refletem → r
 
   // detalhes via modal na primeira tarefa
   await page.getByTestId(`card-${cards[0].id}`).click()
-  await page.getByTestId('task-priority').selectOption('urgent')
+  await pick(page, 'task-priority', 'urgent')
   await page.getByTestId('task-due').fill(today)
   await page.getByTestId('add-checklist').click()
   const cl = (await invoke(page, 'tasks.get', { id: cards[0].id })).checklists[0]
@@ -60,7 +60,7 @@ test('fluxo completo: empresa → projeto → tarefas → visões refletem → r
   await expect(page.getByTestId('kpi-total')).toHaveText('5')
   await expect(page.getByTestId('kpi-overdue')).toHaveText('1')
   await page.getByTestId('list-overdue').getByText('Tarefa 2', { exact: true }).click()
-  await page.getByTestId('task-status').selectOption('done')
+  await pick(page, 'task-status', 'done')
   await page.getByTestId('task-modal-close').click()
   await expect(page.getByTestId('kpi-overdue')).toHaveText('0')
   await expect(page.getByTestId('kpi-done')).toHaveText('1')

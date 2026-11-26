@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { invoke, launchApp, makeTempDir } from '../helpers/app'
+import { invoke, launchApp, makeTempDir, pick } from '../helpers/app'
 
 test('dashboard reflete alterações sem recarregar', async () => {
   const { app, page } = await launchApp(makeTempDir('pth-dash-'))
@@ -12,7 +12,7 @@ test('dashboard reflete alterações sem recarregar', async () => {
   await expect(page.getByTestId('kpi-overdue')).toHaveText('1')
   await page.getByTestId('list-overdue').getByText('Atrasada', { exact: true }).click()
   await expect(page.getByTestId('task-modal')).toBeVisible()
-  await page.getByTestId('task-status').selectOption('done')
+  await pick(page, 'task-status', 'done')
   await page.getByTestId('task-modal-close').click()
   await expect(page.getByTestId('kpi-overdue')).toHaveText('0')
   await expect(page.getByTestId('kpi-done')).toHaveText('1')

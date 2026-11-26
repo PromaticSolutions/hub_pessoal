@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchApp, makeTempDir } from '../helpers/app'
+import { launchApp, makeTempDir, pick } from '../helpers/app'
 
 test('navega por todas as áreas e restaura última rota e tema', async () => {
   const dir = makeTempDir('pth-nav-')
@@ -16,7 +16,7 @@ test('navega por todas as áreas e restaura última rota e tema', async () => {
     await page.getByTestId(id).click()
     await expect(page.getByTestId('page-title')).toContainText(title)
   }
-  await page.getByTestId('theme-select').selectOption('dark')
+  await pick(page, 'theme-select', 'dark')
   await expect(page.locator('html')).toHaveClass(/dark/)
   await page.getByTestId('nav-calendar').click()
   await expect(page.getByTestId('page-title')).toContainText('Calendário')

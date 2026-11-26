@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { invoke, launchApp, makeTempDir } from '../helpers/app'
+import { invoke, launchApp, makeTempDir, pick } from '../helpers/app'
 
 test('cria empresa, pasta e projeto e persiste após reiniciar', async () => {
   const dir = makeTempDir('pth-spaces-')
@@ -14,7 +14,7 @@ test('cria empresa, pasta e projeto e persiste após reiniciar', async () => {
   const folder = await invoke(page, 'folders.create', { companyId: empresa.id, parentId: null, name: 'Clientes' })
   await page.getByTestId('space-new-project').click()
   await page.getByTestId('project-name').fill('CRM')
-  await page.getByTestId('project-folder').selectOption(String(folder.id))
+  await pick(page, 'project-folder', String(folder.id))
   await page.getByTestId('project-save').click()
   await expect(page.getByTestId('project-title')).toHaveValue('CRM')
   await expect(page.getByText('Quadro principal')).toBeVisible()

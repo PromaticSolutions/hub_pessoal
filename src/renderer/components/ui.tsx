@@ -8,7 +8,6 @@ import {
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
-  type SelectHTMLAttributes,
   type TextareaHTMLAttributes
 } from 'react'
 import { X } from 'lucide-react'
@@ -68,17 +67,7 @@ export function Textarea({ className, ...p }: TextareaHTMLAttributes<HTMLTextAre
   )
 }
 
-export function Select({ className, ...p }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      {...p}
-      className={cx(
-        'h-8 rounded-[5px] border border-zinc-200 bg-white px-2 text-sm shadow-[0_1px_2px_rgba(16,24,40,.04)] outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-900',
-        className
-      )}
-    />
-  )
-}
+export { Select } from './Select'
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -210,7 +199,7 @@ export const usePrompt = () => useContext(PromptCtx)
 
 /* ---------- Dropdown menu ---------- */
 
-export type MenuItem = { label: string; onClick: () => void; danger?: boolean; testId?: string } | 'separator'
+export type MenuItem = { label: string; onClick: () => void; danger?: boolean; testId?: string; icon?: ReactNode } | 'separator'
 
 export function Menu({ trigger, items, align = 'right' }: { trigger: ReactNode; items: MenuItem[]; align?: 'left' | 'right' }) {
   const [open, setOpen] = useState(false)
@@ -227,24 +216,28 @@ export function Menu({ trigger, items, align = 'right' }: { trigger: ReactNode; 
       {open && (
         <div
           className={cx(
-            'surface-overlay absolute z-40 mt-1 min-w-44 py-1',
+            'glass pop-in absolute z-40 mt-1 min-w-48 rounded-md py-1 shadow-[var(--shadow-3)]',
             align === 'right' ? 'right-0' : 'left-0'
           )}
         >
           {items.map((it, i) =>
             it === 'separator' ? (
-              <div key={i} className="my-1 border-t border-zinc-200 dark:border-zinc-700" />
+              <div key={i} className="mx-2 my-1 border-t border-[var(--line)]" />
             ) : (
               <button
                 key={i}
                 data-testid={it.testId}
-                className={cx('block w-full px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800', it.danger && 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40')}
+                className={cx(
+                  'mx-1 flex w-[calc(100%-8px)] items-center gap-2 rounded-[4px] px-2 py-1.5 text-left text-sm transition-colors hover:bg-indigo-500/10 hover:text-indigo-700 dark:hover:text-indigo-300',
+                  it.danger && 'text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-400'
+                )}
                 onClick={(e) => {
                   e.stopPropagation()
                   setOpen(false)
                   it.onClick()
                 }}
               >
+                {it.icon && <span className="shrink-0 opacity-70">{it.icon}</span>}
                 {it.label}
               </button>
             )

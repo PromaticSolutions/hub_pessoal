@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { invoke, launchApp, makeTempDir } from '../helpers/app'
+import { invoke, launchApp, makeTempDir, pick } from '../helpers/app'
 
 test('Ctrl+K encontra comentário e abre a tarefa; página de busca filtra', async () => {
   const { app, page } = await launchApp(makeTempDir('pth-search-'))
@@ -19,7 +19,7 @@ test('Ctrl+K encontra comentário e abre a tarefa; página de busca filtra', asy
   await page.getByTestId('palette-row-all').click()
   await expect(page.getByTestId('search-results')).toContainText('Revisar contrato')
   await expect(page.getByTestId('search-results')).toContainText('Contrato antigo')
-  await page.getByTestId('filter-priority').selectOption('high')
+  await pick(page, 'filter-priority', 'high')
   await expect(page.getByTestId('search-results')).not.toContainText('Contrato antigo')
   await app.close()
 })

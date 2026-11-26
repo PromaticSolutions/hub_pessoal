@@ -37,3 +37,9 @@ export async function dragTo(page: Page, from: string, to: string, opts: { yOffs
   await page.mouse.up()
   await page.waitForTimeout(400)
 }
+
+/** Picks an option in the app's custom Select (replaces Playwright's selectOption). */
+export async function pick(page: Page, testId: string, value: string): Promise<void> {
+  await page.getByTestId(testId).click()
+  await page.getByTestId(`${testId}-option-${value}`).click()
+}
