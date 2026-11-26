@@ -4,6 +4,7 @@ import type { ApiMethods } from '@shared/api'
 import { SPACE_COLORS } from '@shared/constants'
 import { Button, ColorPicker, Field, Input, Modal, PageHeader, Select, useConfirm } from '../../components/ui'
 import { useApiQuery, useCall } from '../../lib/queries'
+import { TIME_OPTIONS } from '../my-day/BlockForm'
 import { api } from '../../lib/api'
 import { formatBytes, formatDate } from '../../lib/format'
 import { useToast } from '../../components/toast'
@@ -162,6 +163,7 @@ export default function SettingsPage() {
   const { data: info } = useApiQuery('system.appInfo', {})
   const call = useCall()
   const set = (key: string, value: unknown) => call('settings.set', { key, value })
+  const workday = (data?.['myDay.workday'] as { start: string; end: string } | undefined) ?? { start: '08:00', end: '18:00' }
   return (
     <div className="flex-1 overflow-y-auto">
       <PageHeader title="Configurações" />
@@ -191,6 +193,18 @@ export default function SettingsPage() {
               <Select value={String(data?.weekStartsOn ?? 1)} onChange={(e) => set('weekStartsOn', Number(e.target.value))}>
                 <option value="1">Segunda-feira</option>
                 <option value="0">Domingo</option>
+              </Select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Meu Dia — início do expediente">
+              <Select data-testid="workday-start" value={workday.start} onChange={(e) => set('myDay.workday', { ...workday, start: e.target.value })}>
+                {TIME_OPTIONS.filter((x) => x < workday.end).map((x) => <option key={x} value={x}>{x}</option>)}
+              </Select>
+            </Field>
+            <Field label="Meu Dia — fim do expediente">
+              <Select data-testid="workday-end" value={workday.end} onChange={(e) => set('myDay.workday', { ...workday, end: e.target.value })}>
+                {TIME_OPTIONS.filter((x) => x > workday.start).map((x) => <option key={x} value={x}>{x}</option>)}
               </Select>
             </Field>
           </div>

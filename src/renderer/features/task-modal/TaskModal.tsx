@@ -487,6 +487,16 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
                 <Button size="sm" data-testid="task-move" onClick={() => setMoving(true)}>Mover…</Button>
               </div>
             </Field>
+            {t.scheduled.length > 0 && (
+              <div className="space-y-1 text-xs" data-testid="task-scheduled">
+                <div className="font-medium text-zinc-500">Programada no Meu Dia</div>
+                {t.scheduled.map((s) => (
+                  <Link key={`${s.date}${s.startTime}`} to={`/day?date=${s.date}`} onClick={onClose} className="block text-indigo-600 hover:underline">
+                    {formatDate(s.date)} · {s.startTime}–{s.endTime}
+                  </Link>
+                ))}
+              </div>
+            )}
             <div className="space-y-0.5 text-xs text-zinc-500">
               <div>Criado em {formatDate(t.createdAt)}</div>
               {t.completedAt && <div>Concluído em {formatDate(t.completedAt)}</div>}
