@@ -25,9 +25,12 @@ export async function api<K extends Method>(method: K, input: In<K>): Promise<Ou
     const token = await getAccessToken().catch(() => null)
     if (token) headers.authorization = `Bearer ${token}`
   }
+  const body = JSON.stringify({ method, input })
+  // Saves sent while the page is hidden/closing (flush on pagehide) must outlive the page.
+  const keepalive = globalThis.document?.visibilityState === 'hidden' && body.length < 60_000
   let res: Response
   try {
-    res = await fetch('/api/rpc', { method: 'POST', headers, body: JSON.stringify({ method, input }) })
+    res = await fetch('/api/rpc', { method: 'POST', headers, body, ...(keepalive ? { keepalive } : {}) })
   } catch {
     throw new ApiError('NETWORK', 'Sem conexão com o servidor. Verifique a internet e tente novamente.')
   }

@@ -12,6 +12,7 @@ export type RpcDeps = {
 }
 
 export const UNAUTHORIZED_MESSAGE = 'Sessão expirada. Entre novamente.'
+export const UNAVAILABLE_MESSAGE = 'Servidor de login indisponível. Tente de novo.'
 const MAX_BODY_BYTES = 4 * 1024 * 1024
 
 function json(body: Envelope, status = 200): Response {
@@ -31,6 +32,7 @@ export async function handleRpc(req: Request, deps: RpcDeps): Promise<Response> 
   } catch (e) {
     if (e instanceof AppError && e.code === 'UNAUTHORIZED') return fail('UNAUTHORIZED', UNAUTHORIZED_MESSAGE, 401)
     logError('auth', e)
+    if (e instanceof AppError && e.code === 'UNAVAILABLE') return fail('UNAVAILABLE', UNAVAILABLE_MESSAGE, 503)
     return fail('INTERNAL', 'Não foi possível verificar o login. Tente novamente.', 500)
   }
   let body: { method?: unknown; input?: unknown }

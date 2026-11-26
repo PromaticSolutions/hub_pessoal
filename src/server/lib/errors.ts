@@ -6,6 +6,7 @@ export type ErrorCode =
   | 'SCHEMA_TOO_NEW'
   | 'INVALID_BACKUP'
   | 'UNAUTHORIZED'
+  | 'UNAVAILABLE'
   | 'INTERNAL'
 
 export class AppError extends Error {

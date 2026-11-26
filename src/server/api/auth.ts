@@ -25,12 +25,18 @@ export function createSupabaseAuth(opts: { url: string; anonKey: string; allowed
   if (!getUser) {
     const client = createClient(opts.url, opts.anonKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } })
     getUser = async (token) => {
-      const { data, error } = await client.auth.getUser(token)
+      let res: Awaited<ReturnType<typeof client.auth.getUser>>
+      try {
+        res = await client.auth.getUser(token)
+      } catch (e) {
+        throw new AppError('UNAVAILABLE', `Supabase auth indisponível (rede: ${e instanceof Error ? e.message : String(e)}).`)
+      }
+      const { data, error } = res
       if (error) {
         // 4xx = bad/expired token; anything else (network, 5xx) is a server problem, not a logout.
         const status = (error as { status?: number }).status
         if (status && status >= 400 && status < 500) return null
-        throw new Error(`Supabase auth indisponível (${status ?? 'rede'}).`)
+        throw new AppError('UNAVAILABLE', `Supabase auth indisponível (${status || 'rede'}).`)
       }
       return data.user ? { email: data.user.email ?? null } : null
     }
