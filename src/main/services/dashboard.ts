@@ -5,7 +5,8 @@ import type { AppContext } from '../context'
 import { getSetting } from './settings'
 import { buildTaskWhere, queryTasks } from './taskQuery'
 
-export type DashboardScope = 'all' | 'personal' | 'professional' | { companyId: number } | { projectId: number }
+import type { DashboardScope } from '@shared/widgets'
+export type { DashboardScope }
 
 export type DashboardData = {
   kpis: { total: number; todo: number; inProgress: number; done: number; overdue: number; nearDue: number; activeProjects: number; companies: number }

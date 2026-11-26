@@ -21,6 +21,8 @@ import * as bulk from '../services/bulk'
 import * as dayBlocks from '../services/dayBlocks'
 import * as ideas from '../services/ideas'
 import * as shopping from '../services/shopping'
+import * as dashboards from '../services/dashboards'
+import * as widgetData from '../services/widgetData'
 import * as calendar from '../services/calendar'
 import * as searchSvc from '../services/search'
 import * as backup from '../services/backup'
@@ -71,6 +73,19 @@ const shoppingFields = z.object({
   priceCents: z.number().int().nullable().optional(),
   url: z.string().nullable().optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional()
+})
+const dashScope = z.union([z.enum(['all', 'personal', 'professional']), z.object({ companyId: zid }), z.object({ projectId: zid })])
+const widgetType = z.enum(['kpi', 'summary', 'chart', 'taskList', 'projects', 'shopping'])
+const widgetConfig = z.object({
+  source: z.union([z.object({ kind: z.literal('inherit') }), z.object({ kind: z.literal('scope'), scope: dashScope })]),
+  color: z.string().optional(),
+  metric: z.string().optional(),
+  metrics: z.array(z.string()).optional(),
+  chart: z.enum(['bar', 'stackedBar', 'line', 'pie', 'donut', 'table']).optional(),
+  data: z.enum(['byPriority', 'byStatus', 'byCompany', 'byProject', 'productivity', 'createdVsCompleted', 'shoppingByCategory']).optional(),
+  list: z.enum(['overdue', 'nearDue', 'filter']).optional(),
+  filter: z.record(z.string(), z.unknown()).optional(),
+  limit: z.number().int().optional()
 })
 const between = { beforeId: zid.nullable(), afterId: zid.nullable() }
 
@@ -285,6 +300,27 @@ export const handlers = {
   'shopping.update': h(shoppingFields.extend({ id: zid, name: z.string().optional() }), (c, { id, ...p }) => shopping.updateShoppingItem(c, id, p)),
   'shopping.setBought': h(z.object({ id: zid, bought: z.boolean() }), (c, i) => shopping.setBought(c, i.id, i.bought)),
   'shopping.delete': h(ID, (c, i) => shopping.deleteShoppingItem(c, i.id)),
+  // dashboards personalizáveis
+  'dashboards.list': h(z.object({}), (c) => dashboards.listDashboards(c)),
+  'dashboards.get': h(ID, (c, i) => dashboards.getDashboardFull(c, i.id)),
+  'dashboards.create': h(
+    z.object({ name: z.string(), template: z.enum(['geral', 'profissional', 'pessoal', 'financeiro', 'empty']).optional(), duplicateOf: zid.optional() }),
+    (c, i) => dashboards.createDashboard(c, i)
+  ),
+  'dashboards.rename': h(z.object({ id: zid, name: z.string() }), (c, i) => dashboards.renameDashboard(c, i.id, i.name)),
+  'dashboards.setScope': h(z.object({ id: zid, scope: dashScope }), (c, i) => dashboards.setDashboardScope(c, i.id, i.scope)),
+  'dashboards.delete': h(ID, (c, i) => dashboards.deleteDashboard(c, i.id)),
+  'dashboards.addWidget': h(z.object({ dashboardId: zid, type: widgetType, title: z.string().optional(), config: widgetConfig.optional() }), (c, i) => dashboards.addWidget(c, i as never)),
+  'dashboards.updateWidget': h(
+    z.object({ id: zid, title: z.string().optional(), type: widgetType.optional(), config: widgetConfig.optional(), w: z.number().int().optional(), h: z.number().int().optional() }),
+    (c, { id, ...p }) => dashboards.updateWidget(c, id, p as never)
+  ),
+  'dashboards.removeWidget': h(ID, (c, i) => dashboards.removeWidget(c, i.id)),
+  'dashboards.saveLayout': h(
+    z.object({ dashboardId: zid, items: z.array(z.object({ id: zid, x: z.number(), y: z.number(), w: z.number(), h: z.number() })) }),
+    (c, i) => dashboards.saveLayout(c, i)
+  ),
+  'widgets.data': h(z.object({ widget: z.object({ type: widgetType, config: widgetConfig }), dashboardScope: dashScope }), (c, i) => widgetData.getWidgetData(c, i as never)),
   // @@end
 } satisfies Record<string, Handler>
 

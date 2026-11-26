@@ -24,6 +24,7 @@ export function runMigrations(
     if (m.version <= from) continue
     db.transaction(() => {
       db.exec(m.sql)
+      m.run?.(db)
       db.pragma(`user_version = ${m.version}`)
     })()
   }
