@@ -27,6 +27,23 @@ import { ColorDialog, softBg } from '../../components/ColorChoice'
 
 type Filters = { text: string; labelId: number | null; priority: Priority | ''; archived: boolean }
 
+/** Drop target for a card computed from the final pointer position: the column under the pointer and the insertion index among its cards. */
+function dropFromPointer(columns: Column[], byColumn: Record<number, CardSummary[]>, activeId: number, x: number, y: number): { columnId: number; index: number } | null {
+  for (const col of columns) {
+    const el = document.querySelector(`[data-testid="column-${col.id}"]`)
+    const r = el?.getBoundingClientRect()
+    if (!r || x < r.left || x > r.right) continue
+    const list = (byColumn[col.id] ?? []).filter((c) => c.id !== activeId)
+    let index = 0
+    for (const c of list) {
+      const cr = document.querySelector(`[data-testid="card-${c.id}"]`)?.getBoundingClientRect()
+      if (cr && cr.top + cr.height / 2 < y) index++
+    }
+    return { columnId: col.id, index }
+  }
+  return null
+}
+
 export function useOpenTask() {
   const [params, setParams] = useSearchParams()
   return (id: number) => {
@@ -317,7 +334,12 @@ export function BoardView({ boardId }: { boardId: number }) {
     const card = active.data.current!.card as CardSummary
     let columnId: number
     let index: number
-    if (over.data.current?.type === 'card') {
+    const pev = e.activatorEvent as PointerEvent
+    const byPointer = 'clientX' in pev ? dropFromPointer(columns, byColumn, card.id, pev.clientX + e.delta.x, pev.clientY + e.delta.y) : null
+    if (byPointer) {
+      columnId = byPointer.columnId
+      index = byPointer.index
+    } else if (over.data.current?.type === 'card') {
       const overCard = over.data.current.card as CardSummary
       columnId = overCard.columnId
       const list = byColumn[columnId] ?? []

@@ -20,20 +20,20 @@ test('quadro com 200 cartões: arrastar, reordenar e persistir após reiniciar',
 
   // 1) card from Backlog to "Em andamento" (column body end)
   await dragTo(page, `[data-testid=card-${first.id}]`, `[data-testid=column-title-${andamento.id}]`, { yOffset: 60 })
+  await expect.poll(async () => ((await invoke(page, 'boards.get', { id: boardId })) as Board).cards.find((c) => c.id === first.id)!.columnId).toBe(andamento.id)
   board = await invoke(page, 'boards.get', { id: boardId })
-  expect(board.cards.find((c) => c.id === first.id)!.columnId).toBe(andamento.id)
 
   // 2) second card of "A fazer" to the top of "A fazer"
   const afList = board.cards.filter((c) => c.columnId === afazer.id)
-  await dragTo(page, `[data-testid=card-${afList[1].id}]`, `[data-testid=card-${afList[0].id}]`, { yOffset: 2 })
+  await dragTo(page, `[data-testid=card-${afList[1].id}]`, `[data-testid=card-${afList[0].id}]`, { yOffset: 6 })
+  await expect.poll(async () => ((await invoke(page, 'boards.get', { id: boardId })) as Board).cards.filter((c) => c.columnId === afazer.id)[0].id).toBe(afList[1].id)
   board = await invoke(page, 'boards.get', { id: boardId })
-  expect(board.cards.filter((c) => c.columnId === afazer.id)[0].id).toBe(afList[1].id)
 
   // 3) move the third column ("Em andamento") before the first one
   const last = board.columns[2]
   await dragTo(page, `[data-testid=column-title-${last.id}]`, `[data-testid=column-title-${board.columns[0].id}]`)
+  await expect.poll(async () => ((await invoke(page, 'boards.get', { id: boardId })) as Board).columns[0].id).toBe(last.id)
   board = await invoke(page, 'boards.get', { id: boardId })
-  expect(board.columns[0].id).toBe(last.id)
 
   const before = order(board)
   const colOrder = board.columns.map((c) => c.id)
