@@ -9,6 +9,7 @@ import { useApiQuery, useCall } from '../../lib/queries'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/format'
 import { useToast } from '../../components/toast'
+import { openExternal } from '../../lib/links'
 
 type Item = ApiMethods['shopping.list']['output'][number]
 type Filter = 'pending' | 'bought' | 'all'
@@ -73,11 +74,12 @@ function ItemDialog({ item, onClose }: { item: Item; onClose: () => void }) {
 function Row({ i, onEdit, card }: { i: Item; onEdit: () => void; card?: boolean }) {
   const call = useCall()
   const confirm = useConfirm()
+  const toast = useToast()
   const bought = i.status === 'bought'
   const total = lineTotal(i)
   const actions = (
     <div className="flex shrink-0 items-center gap-1 text-zinc-400">
-      {i.url && <button title="Abrir link" className="rounded p-1 hover:text-indigo-600" onClick={() => api('system.openExternal', { url: i.url! })}><ExternalLink size={14} /></button>}
+      {i.url && <button title="Abrir link" className="rounded p-1 hover:text-indigo-600" onClick={() => { try { openExternal(i.url!) } catch (e) { toast.error((e as Error).message) } }}><ExternalLink size={14} /></button>}
       <button title="Editar" data-testid={`shopping-edit-${i.id}`} className="rounded p-1 hover:text-zinc-700" onClick={onEdit}><Pencil size={14} /></button>
       <button
         title="Excluir"

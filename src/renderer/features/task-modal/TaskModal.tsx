@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Archive, Copy, ExternalLink, FolderOpen, Paperclip, Trash2, X } from 'lucide-react'
+import { Archive, Copy, ExternalLink, Paperclip, Trash2, X } from 'lucide-react'
 import type { ActivityEntry, Attachment, ColumnCategory, Priority } from '@shared/types'
 import { CATEGORIES, CATEGORY_LABELS, PRIORITIES, PRIORITY_LABELS, SPACE_COLORS } from '@shared/constants'
 import { Button, Dot, Field, Input, Modal, Select, Tabs, Textarea, useConfirm } from '../../components/ui'
@@ -14,6 +14,8 @@ import { useToast } from '../../components/toast'
 import { MoveTaskDialog } from './MoveTaskDialog'
 import { ColorChoice } from '../../components/ColorChoice'
 import { flushAll, registerFlusher, track } from '../../lib/flush'
+import { SIGNED_URL_STALE_MS, useAttachmentActions } from '../../lib/attachments'
+import { openExternal } from '../../lib/links'
 
 /* ---------- host: opens when ?task=<id> ---------- */
 
@@ -159,7 +161,7 @@ function ChecklistSection({ taskId, checklists }: { taskId: number; checklists: 
 
 function AttachmentThumb({ a }: { a: Attachment }) {
   const isImg = a.mimeType.startsWith('image/')
-  const { data } = useApiQuery('attachments.thumbnail', { id: a.id }, { enabled: isImg })
+  const { data } = useApiQuery('attachments.url', { id: a.id }, { enabled: isImg, staleTime: SIGNED_URL_STALE_MS })
   if (isImg && data) return <img src={data} alt="" className="h-10 w-10 rounded object-cover" />
   return <div className="flex h-10 w-10 items-center justify-center rounded bg-zinc-100 text-[10px] font-semibold uppercase text-zinc-500 dark:bg-zinc-800">{a.originalName.split('.').pop()?.slice(0, 4)}</div>
 }
@@ -168,13 +170,13 @@ function AttachmentsSection({ taskId, attachments }: { taskId: number; attachmen
   const call = useCall()
   const confirm = useConfirm()
   const inputRef = useRef<HTMLInputElement>(null)
-  const addPaths = (paths: string[]) => paths.length && call('attachments.add', { taskId, sourcePaths: paths })
+  const files = useAttachmentActions()
   return (
     <Section
       title="Anexos"
       actions={
         <>
-          <Button size="sm" data-testid="add-attachment" onClick={async () => addPaths(await api('system.pickFiles', { multiple: true }))}>
+          <Button size="sm" data-testid="add-attachment" onClick={() => inputRef.current?.click()}>
             <Paperclip size={12} /> Adicionar
           </Button>
           <input
@@ -184,8 +186,7 @@ function AttachmentsSection({ taskId, attachments }: { taskId: number; attachmen
             hidden
             data-testid="attach-input"
             onChange={(e) => {
-              const files = Array.from(e.target.files ?? [])
-              addPaths(files.map((f) => window.api.getPathForFile(f)).filter(Boolean))
+              files.add({ taskId }, Array.from(e.target.files ?? []))
               e.target.value = ''
             }}
           />
@@ -197,13 +198,12 @@ function AttachmentsSection({ taskId, attachments }: { taskId: number; attachmen
         {attachments.map((a) => (
           <div key={a.id} data-testid={`attachment-${a.id}`} className="group flex items-center gap-2 rounded p-1 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
             <AttachmentThumb a={a} />
-            <button className="min-w-0 flex-1 text-left" onClick={() => call('attachments.open', { id: a.id })}>
+            <button className="min-w-0 flex-1 text-left" onClick={() => files.open(a.id)}>
               <div className="truncate text-sm">{a.originalName}</div>
               <div className="text-xs text-zinc-500">{formatBytes(a.sizeBytes)} · {formatDate(a.createdAt)}</div>
             </button>
             <div className="invisible flex gap-1 group-hover:visible">
-              <button title="Abrir" onClick={() => call('attachments.open', { id: a.id })}><ExternalLink size={14} /></button>
-              <button title="Mostrar na pasta" onClick={() => call('attachments.reveal', { id: a.id })}><FolderOpen size={14} /></button>
+              <button title="Abrir" onClick={() => files.open(a.id)}><ExternalLink size={14} /></button>
               <button
                 title="Remover"
                 className="hover:text-red-600"
@@ -322,6 +322,7 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
   const call = useCall()
   const confirm = useConfirm()
   const toast = useToast()
+  const attachmentActions = useAttachmentActions()
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
   const [preview, setPreview] = useState(true)
@@ -390,8 +391,7 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
           if (!e.dataTransfer.files.length) return
           e.preventDefault()
           setDragOver(false)
-          const paths = Array.from(e.dataTransfer.files).map((f) => window.api.getPathForFile(f)).filter(Boolean)
-          if (paths.length) call('attachments.add', { taskId, sourcePaths: paths })
+          attachmentActions.add({ taskId }, Array.from(e.dataTransfer.files))
         }}
         tabIndex={-1}
       >
@@ -432,7 +432,9 @@ export function TaskModal({ taskId, onClose }: { taskId: number; onClose: () => 
                             onClick={(e) => {
                               e.preventDefault()
                               e.stopPropagation()
-                              if (href) api('system.openExternal', { url: href }).catch((err) => toast.error(err.message))
+                              if (href) {
+                                try { openExternal(href) } catch (err) { toast.error((err as Error).message) }
+                              }
                             }}
                           >
                             {children}

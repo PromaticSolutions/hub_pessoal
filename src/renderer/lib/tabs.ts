@@ -1,4 +1,4 @@
-/** Browser-like tabs: pure state transitions (persisted in settings 'tabs.state'). */
+/** Browser-like tabs: pure state transitions (persisted per device in localStorage 'hub.tabs.state'). */
 export type Tab = { id: string; path: string; pinned?: boolean }
 export type TabsState = { tabs: Tab[]; activeId: string }
 
@@ -100,4 +100,24 @@ export function cycle(s: TabsState, dir: 1 | -1): TabsState {
 
 export function activateIndex(s: TabsState, n: number): TabsState {
   return s.tabs[n] ? { ...s, activeId: s.tabs[n].id } : s
+}
+
+export const TABS_STORAGE_KEY = 'hub.tabs.state'
+
+/** Saved tabs for this browser, or null (missing, corrupt or storage blocked). */
+export function loadSavedTabs(): unknown {
+  try {
+    const raw = globalThis.localStorage?.getItem(TABS_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+export function saveTabs(s: TabsState): void {
+  try {
+    globalThis.localStorage?.setItem(TABS_STORAGE_KEY, JSON.stringify(s))
+  } catch {
+    /* storage full/blocked: tabs just won't be restored */
+  }
 }

@@ -206,3 +206,6 @@ export type Idea = {
   createdAt: string
   updatedAt: string
 }
+
+/** File uploaded to Storage under uploads/tmp/ (files.uploadUrl + PUT), consumed by attachments.add / companies.setLogo / backup.inspect. */
+export type UploadRef = { key: string; name: string; size: number; mime: string }

@@ -32,8 +32,18 @@ export function TabBar() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return
       const k = e.key.toLowerCase()
+      // Browsers reserve Ctrl+T/W/Tab, so Alt variants work everywhere (Ctrl ones kept where the browser lets them through).
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (k === 'pagedown' || k === 'pageup') { e.preventDefault(); tabs.cycle(k === 'pagedown' ? 1 : -1); return }
+        const digit = /^Digit([1-9])$/.exec(e.code)?.[1] ?? (/^[1-9]$/.test(k) ? k : null)
+        if (digit) { e.preventDefault(); tabs.activateIndex(digit === '9' ? tabs.state.tabs.length - 1 : Number(digit) - 1); return }
+        if (isTyping(e)) return
+        if (e.code === 'KeyT' || k === 't') { e.preventDefault(); tabs.open('/all') }
+        else if (e.code === 'KeyW' || k === 'w') { e.preventDefault(); tabs.close(tabs.state.activeId) }
+        return
+      }
+      if (!(e.ctrlKey || e.metaKey)) return
       if (k === 'tab') { e.preventDefault(); tabs.cycle(e.shiftKey ? -1 : 1); return }
       if (isTyping(e)) return
       if (k === 't') { e.preventDefault(); tabs.open('/all') }
@@ -88,7 +98,7 @@ export function TabBar() {
           </div>
         )
       })}
-      <button type="button" data-testid="tab-new" aria-label="Nova aba" title="Nova aba (Ctrl+T)" onClick={() => tabs.open('/all')} className="mb-1 ml-1 rounded-[4px] p-1 text-zinc-500 hover:bg-white/70 hover:text-zinc-800 dark:hover:bg-zinc-800">
+      <button type="button" data-testid="tab-new" aria-label="Nova aba" title="Nova aba (Alt+T)" onClick={() => tabs.open('/all')} className="mb-1 ml-1 rounded-[4px] p-1 text-zinc-500 hover:bg-white/70 hover:text-zinc-800 dark:hover:bg-zinc-800">
         <Plus size={15} />
       </button>
     </div>

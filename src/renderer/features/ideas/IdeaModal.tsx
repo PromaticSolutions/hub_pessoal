@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ExternalLink, FolderOpen, Paperclip, Trash2 } from 'lucide-react'
+import { ExternalLink, Paperclip, Trash2 } from 'lucide-react'
 import type { IdeaStatus, Priority } from '@shared/types'
 import { IDEA_STATUSES, IDEA_STATUS_LABELS, PRIORITIES, PRIORITY_LABELS, SPACE_COLORS } from '@shared/constants'
 import { Button, Field, Input, Modal, Select, Textarea, useConfirm } from '../../components/ui'
@@ -10,6 +10,7 @@ import { useApiQuery, useCall } from '../../lib/queries'
 import { api } from '../../lib/api'
 import { formatBytes, formatDate } from '../../lib/format'
 import { useToast } from '../../components/toast'
+import { useAttachmentActions } from '../../lib/attachments'
 import { allProjects } from '../week/TaskFilters'
 
 export function IdeaModal({ id, onClose }: { id: number; onClose: () => void }) {
@@ -20,6 +21,7 @@ export function IdeaModal({ id, onClose }: { id: number; onClose: () => void }) 
   const call = useCall()
   const confirm = useConfirm()
   const toast = useToast()
+  const files = useAttachmentActions()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
@@ -45,7 +47,7 @@ export function IdeaModal({ id, onClose }: { id: number; onClose: () => void }) 
   const save = (patch: Parameters<typeof api<'ideas.update'>>[1] extends infer P ? Omit<P & object, 'id'> : never) => call('ideas.update', { id, ...patch })
   const selectedLabels = idea.labels.map((l) => l.id)
   const projects = allProjects(tree).filter((p) => !idea.companyId || p.companyId === idea.companyId)
-  const addFiles = (paths: string[]) => paths.length && call('attachments.add', { ideaId: id, sourcePaths: paths })
+  const addFiles = (list: File[]) => files.add({ ideaId: id }, list)
   const close = async () => {
     const el = document.activeElement as HTMLElement | null
     el?.blur()
@@ -88,17 +90,16 @@ export function IdeaModal({ id, onClose }: { id: number; onClose: () => void }) 
               <div className="flex items-center justify-between">
                 <h3 className="section-title">Anexos</h3>
                 <div className="flex gap-1">
-                  <Button size="sm" onClick={async () => addFiles(await api('system.pickFiles', { multiple: true }))}><Paperclip size={12} /> Adicionar</Button>
-                  <input ref={fileRef} type="file" multiple hidden data-testid="idea-attach-input" onChange={(e) => { addFiles(Array.from(e.target.files ?? []).map((f) => window.api.getPathForFile(f))); e.target.value = '' }} />
+                  <Button size="sm" onClick={() => fileRef.current?.click()}><Paperclip size={12} /> Adicionar</Button>
+                  <input ref={fileRef} type="file" multiple hidden data-testid="idea-attach-input" onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
                 </div>
               </div>
               {!idea.attachments.length && <div className="rounded-md border border-dashed border-[var(--line-strong)] p-3 text-center text-xs text-zinc-500">Nenhum anexo.</div>}
               {idea.attachments.map((a) => (
                 <div key={a.id} className="group flex items-center gap-2 rounded p-1 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                  <button className="min-w-0 flex-1 truncate text-left" onClick={() => call('attachments.open', { id: a.id })}>{a.originalName} <span className="text-xs text-zinc-500">· {formatBytes(a.sizeBytes)}</span></button>
+                  <button className="min-w-0 flex-1 truncate text-left" onClick={() => files.open(a.id)}>{a.originalName} <span className="text-xs text-zinc-500">· {formatBytes(a.sizeBytes)}</span></button>
                   <div className="invisible flex gap-1 group-hover:visible">
-                    <button title="Abrir" onClick={() => call('attachments.open', { id: a.id })}><ExternalLink size={14} /></button>
-                    <button title="Mostrar na pasta" onClick={() => call('attachments.reveal', { id: a.id })}><FolderOpen size={14} /></button>
+                    <button title="Abrir" onClick={() => files.open(a.id)}><ExternalLink size={14} /></button>
                     <button title="Remover" className="hover:text-red-600" onClick={() => call('attachments.delete', { id: a.id })}><Trash2 size={14} /></button>
                   </div>
                 </div>

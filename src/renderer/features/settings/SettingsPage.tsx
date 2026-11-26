@@ -1,5 +1,4 @@
-import { useState, type ReactNode } from 'react'
-import { format, parseISO } from 'date-fns'
+import { useRef, useState, type ReactNode } from 'react'
 import type { ApiMethods } from '@shared/api'
 import { SPACE_COLORS } from '@shared/constants'
 import { Button, ColorPicker, Field, Input, Modal, PageHeader, Select, useConfirm } from '../../components/ui'
@@ -8,8 +7,18 @@ import { TIME_OPTIONS } from '../my-day/BlockForm'
 import { api } from '../../lib/api'
 import { formatBytes, formatDate } from '../../lib/format'
 import { useToast } from '../../components/toast'
+import { uploadFiles } from '../../lib/upload'
+import { openAsync } from '../../lib/links'
+import { DEV_AUTH, signOut } from '../../lib/supabase'
 
-type Manifest = ApiMethods['backup.inspect']['output']['manifest']
+type Manifest = ApiMethods['backup.inspect']['output']
+
+const COUNT_LABELS: Record<string, string> = { companies: 'espaço(s)', projects: 'projeto(s)', tasks: 'tarefa(s)', attachments: 'anexo(s)', ideas: 'ideia(s)', shopping_items: 'item(ns) de compra' }
+function countsText(counts: Record<string, number> | undefined): string {
+  if (!counts) return ''
+  const keys = Object.keys(COUNT_LABELS).filter((k) => k in counts)
+  return keys.map((k) => `${counts[k]} ${COUNT_LABELS[k]}`).join(', ')
+}
 
 function Section({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
   return (
@@ -75,56 +84,72 @@ function BackupSection() {
   const confirm = useConfirm()
   const { data: autos } = useApiQuery('backup.listAuto', {})
   const [busy, setBusy] = useState<string | null>(null)
-  const [pending, setPending] = useState<{ manifest: Manifest; token: string; file: string } | null>(null)
+  const [pending, setPending] = useState<{ manifest: Manifest; key: string; file: string } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  const backup = async (kind: 'full' | 'db') => {
-    const suggested = await api('backup.defaultPath', { kind })
-    const dest = await api('system.pickSavePath', { defaultPath: suggested })
-    if (!dest) return
-    setBusy(kind === 'full' ? 'Gerando backup completo…' : 'Gerando backup do banco…')
+  const withBusy = async (label: string, fn: () => Promise<void>) => {
+    setBusy(label)
     try {
-      const m = kind === 'full' ? await call('backup.createFull', { destPath: dest }) : await call('backup.createDb', { destPath: dest })
-      toast.success(`Backup salvo em ${dest} (${m.counts.tasks} tarefas, ${m.counts.attachments} anexos)`)
+      await fn()
+    } catch (e) {
+      if (!(e as { toasted?: boolean }).toasted) toast.error((e as Error).message)
     } finally {
       setBusy(null)
     }
   }
-  const chooseRestore = async () => {
-    const file = await api('system.pickOpenPath', { extensions: ['zip', 'db'] })
-    if (!file) return
-    setBusy('Verificando backup…')
-    try {
-      const r = await call('backup.inspect', { path: file })
-      setPending({ ...r, file })
-    } finally {
-      setBusy(null)
-    }
+  const download = () =>
+    withBusy('Gerando backup…', async () => {
+      let counts: Record<string, number> | undefined
+      await openAsync(async () => {
+        const r = await call('backup.create', {})
+        counts = r.manifest.counts
+        return r.url
+      })
+      toast.success(`Backup gerado${counts ? ` (${countsText(counts)})` : ''}`)
+    })
+  const chooseRestore = (file: File) =>
+    withBusy('Enviando e verificando backup…', async () => {
+      const [up] = await uploadFiles([file])
+      const manifest = await call('backup.inspect', { key: up.key })
+      setPending({ manifest, key: up.key, file: file.name })
+    })
+  const afterRestore = () => {
+    toast.success('Backup restaurado.')
+    setTimeout(() => window.location.reload(), 800)
   }
   return (
     <Section title="Backup e restauração" id="settings-backup">
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        O backup completo gera um arquivo .zip com o banco de dados e todos os anexos. Guarde-o em outro disco ou na nuvem.
-        Além disso, o app guarda automaticamente uma cópia diária do banco (últimos 14 dias).
+        O backup gera um arquivo JSON com todos os dados (os anexos ficam guardados no Storage). Guarde-o em outro disco ou na nuvem.
+        Além disso, o app guarda automaticamente uma cópia diária (últimos 30 dias).
       </p>
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" data-testid="backup-full" disabled={!!busy} onClick={() => backup('full')}>Fazer backup completo</Button>
-        <Button disabled={!!busy} onClick={() => backup('db')}>Backup só do banco</Button>
-        <Button disabled={!!busy} data-testid="backup-restore" onClick={chooseRestore}>Restaurar backup…</Button>
+        <Button variant="primary" data-testid="backup-full" disabled={!!busy} onClick={download}>Baixar backup</Button>
+        <Button disabled={!!busy} data-testid="backup-restore" onClick={() => fileRef.current?.click()}>Restaurar de arquivo…</Button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,.gz,application/json,application/gzip"
+          hidden
+          data-testid="backup-restore-input"
+          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void chooseRestore(f) }}
+        />
       </div>
       {busy && <div className="text-sm text-indigo-600">{busy}</div>}
       <div>
         <h3 className="mb-1 text-sm font-medium">Backups automáticos</h3>
         <ul className="space-y-1 text-sm" data-testid="auto-backups">
           {autos?.map((b) => (
-            <li key={b.file} className="flex items-center gap-3">
-              <span>{format(parseISO(b.date), 'dd/MM/yyyy')}</span>
-              <span className="text-xs text-zinc-500">{formatBytes(b.sizeBytes)}</span>
+            <li key={b.key} className="flex items-center gap-3">
+              <span>{formatDate(b.createdAt)}</span>
+              <span className="text-xs text-zinc-500">{formatBytes(b.size)}</span>
               <Button
                 size="sm"
                 variant="ghost"
+                disabled={!!busy}
                 onClick={async () => {
-                  if (await confirm({ title: `Restaurar o backup de ${format(parseISO(b.date), 'dd/MM/yyyy')}?`, description: 'O estado atual será guardado em backups/pre-restore e o app reiniciará. Os anexos atuais são mantidos.', danger: true, confirmLabel: 'Restaurar e reiniciar' }))
-                    await call('backup.restoreAuto', { file: b.file })
+                  if (await confirm({ title: `Restaurar o backup de ${formatDate(b.createdAt)}?`, description: 'Os dados atuais serão substituídos. Uma cópia deles é guardada antes como backup automático. Os anexos atuais são mantidos.', danger: true, confirmLabel: 'Restaurar' }))
+                    await withBusy('Restaurando…', async () => { await call('backup.restoreAuto', { key: b.key }); afterRestore() })
                 }}
               >
                 Restaurar este
@@ -139,16 +164,22 @@ function BackupSection() {
           <div className="space-y-3 text-sm">
             <div className="break-all text-xs text-zinc-500">{pending.file}</div>
             <ul className="space-y-0.5">
-              <li>Tipo: {pending.manifest.kind === 'full' ? 'completo (banco + anexos)' : 'somente banco de dados'}</li>
               {pending.manifest.createdAt && <li>Criado em: {formatDate(pending.manifest.createdAt)}</li>}
-              <li>Conteúdo: {pending.manifest.counts.companies} espaço(s), {pending.manifest.counts.projects} projeto(s), {pending.manifest.counts.tasks} tarefa(s), {pending.manifest.counts.attachments} anexo(s)</li>
+              <li>Conteúdo: {countsText(pending.manifest.counts)}</li>
             </ul>
             <p className="rounded bg-amber-50 p-2 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-              Os dados atuais serão substituídos. Uma cópia deles fica guardada em backups/pre-restore. O app reiniciará.
+              Os dados atuais serão substituídos. Uma cópia deles é guardada antes como backup automático.
             </p>
             <div className="flex justify-end gap-2">
               <Button onClick={() => setPending(null)}>Cancelar</Button>
-              <Button variant="danger" data-testid="restore-ok" onClick={() => call('backup.restore', { token: pending.token })}>Restaurar e reiniciar</Button>
+              <Button
+                variant="danger"
+                data-testid="restore-ok"
+                disabled={!!busy}
+                onClick={() => withBusy('Restaurando…', async () => { await call('backup.restore', { key: pending.key }); setPending(null); afterRestore() })}
+              >
+                Restaurar
+              </Button>
             </div>
           </div>
         </Modal>
@@ -157,10 +188,14 @@ function BackupSection() {
   )
 }
 
+/** system.dataStats shape is "counts + Storage bytes"; read it loosely so the page survives small server-side naming changes. */
+type LooseStats = { counts?: Record<string, number>; storageBytes?: number; attachmentCount?: number; attachmentsBytes?: number }
+
 export default function SettingsPage() {
   const { data } = useApiQuery('settings.all', {})
   const { data: stats } = useApiQuery('system.dataStats', {})
   const { data: info } = useApiQuery('system.appInfo', {})
+  const s = stats as unknown as LooseStats | undefined
   const call = useCall()
   const set = (key: string, value: unknown) => call('settings.set', { key, value })
   const workday = (data?.['myDay.workday'] as { start: string; end: string } | undefined) ?? { start: '08:00', end: '18:00' }
@@ -214,19 +249,22 @@ export default function SettingsPage() {
         </Section>
         <LabelsSection />
         <Section title="Dados" id="settings-data">
-          <div className="text-sm">
-            <div>Pasta de dados: <code data-testid="data-path" className="break-all rounded bg-zinc-100 px-1 dark:bg-zinc-800">{stats?.dataPath}</code></div>
+          <div className="text-sm" data-testid="data-path">
+            {s?.counts && <div>{countsText(s.counts)}</div>}
             <div className="mt-1 text-zinc-500">
-              Banco: {formatBytes(stats?.dbBytes ?? 0)} · Anexos: {stats?.attachmentCount ?? 0} arquivo(s), {formatBytes(stats?.attachmentsBytes ?? 0)}
+              Uso do Storage: {formatBytes(s?.storageBytes ?? s?.attachmentsBytes ?? 0)}
+              {s?.attachmentCount !== undefined && <> · Anexos: {s.attachmentCount} arquivo(s)</>}
             </div>
-            <div className="mt-1 text-xs text-zinc-500">Esta pasta não faz parte da instalação: atualizar ou reinstalar o app não apaga nada.</div>
+            <div className="mt-1 text-xs text-zinc-500">Os dados ficam na nuvem (Supabase) e são os mesmos em qualquer computador em que você entrar.</div>
           </div>
-          <Button size="sm" onClick={() => call('system.openDataFolder', {})}>Abrir pasta</Button>
         </Section>
         <BackupSection />
         <Section title="Sobre">
-          <div className="text-sm text-zinc-600 dark:text-zinc-400">
-            Personal Task Hub {info?.version} · schema v{info?.schemaVersion} · Electron {info?.electron}
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-zinc-600 dark:text-zinc-400">
+              Personal Task Hub {info?.version} · schema v{info?.schemaVersion}
+            </div>
+            {!DEV_AUTH && <Button size="sm" data-testid="sign-out" onClick={() => { void signOut() }}>Sair</Button>}
           </div>
         </Section>
       </div>

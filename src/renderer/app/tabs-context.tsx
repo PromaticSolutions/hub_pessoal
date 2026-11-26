@@ -27,9 +27,10 @@ export function TabsProvider({ children }: { children: ReactNode }) {
   // Restore saved tabs once.
   useEffect(() => {
     let alive = true
-    Promise.all([api('settings.get', { key: 'tabs.state' }), api('settings.get', { key: 'lastRoute' })])
-      .catch(() => [null, null] as const)
-      .then(([saved, last]) => {
+    const saved = T.loadSavedTabs()
+    api('settings.get', { key: 'lastRoute' })
+      .catch(() => null)
+      .then((last) => {
         if (!alive) return
         const hashPath = loc.pathname + loc.search
         let s = T.initialTabs(saved, typeof last === 'string' ? last : undefined)
@@ -52,7 +53,7 @@ export function TabsProvider({ children }: { children: ReactNode }) {
   // Persist.
   useEffect(() => {
     if (!ready) return
-    const t = setTimeout(() => { api('settings.set', { key: 'tabs.state', value: state }).catch(() => {}) }, 150)
+    const t = setTimeout(() => T.saveTabs(state), 150)
     return () => clearTimeout(t)
   }, [ready, state])
 

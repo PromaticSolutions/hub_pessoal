@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Company, Project, ProjectStatus } from '@shared/types'
+import type { Company, Project, ProjectStatus, UploadRef } from '@shared/types'
+import { uploadFiles } from '../../lib/upload'
+import { useToast } from '../../components/toast'
 import { PROJECT_STATUSES, PROJECT_STATUS_LABELS, SPACE_COLORS } from '@shared/constants'
 import { Button, ColorPicker, Field, Input, Modal, Select, Textarea, useConfirm, usePrompt } from '../../components/ui'
 import { api } from '../../lib/api'
@@ -103,9 +105,11 @@ function CompanyForm({ state, onClose }: { state: { open: boolean; company?: Com
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [color, setColor] = useState(SPACE_COLORS[1])
-  const [logo, setLogo] = useState<string | null | undefined>(undefined)
+  const [logo, setLogo] = useState<File | null | undefined>(undefined)
   const call = useCall()
+  const toast = useToast()
   const nav = useNavigate()
+  const logoInput = useRef<HTMLInputElement>(null)
   useEffect(() => {
     if (!state.open) return
     setName(c?.name ?? '')
@@ -113,15 +117,21 @@ function CompanyForm({ state, onClose }: { state: { open: boolean; company?: Com
     setColor(c?.color ?? SPACE_COLORS[Math.floor(Math.random() * SPACE_COLORS.length)])
     setLogo(undefined)
   }, [state.open, c])
-  const pickLogo = async () => {
-    const [p] = await api('system.pickFiles', { multiple: false, images: true })
-    if (p) setLogo(p)
-  }
   const save = async () => {
+    // Upload first so an oversized/failed logo doesn't leave a half-saved company.
+    let upload: UploadRef | null | undefined = logo === null ? null : undefined
+    if (logo) {
+      try {
+        ;[upload] = await uploadFiles([logo])
+      } catch (e) {
+        toast.error((e as Error).message)
+        return
+      }
+    }
     const saved = c
       ? await call('companies.update', { id: c.id, name, description, color })
       : await call('companies.create', { name, description, color })
-    if (logo !== undefined) await call('companies.setLogo', { id: saved.id, sourcePath: logo })
+    if (upload !== undefined) await call('companies.setLogo', { id: saved.id, upload })
     onClose()
     if (!c) nav(`/spaces/${saved.id}`)
   }
@@ -139,9 +149,17 @@ function CompanyForm({ state, onClose }: { state: { open: boolean; company?: Com
         </Field>
         <Field label="Logotipo">
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={pickLogo}>Escolher imagem</Button>
+            <Button size="sm" onClick={() => logoInput.current?.click()}>Escolher imagem</Button>
+            <input
+              ref={logoInput}
+              type="file"
+              accept="image/*"
+              hidden
+              data-testid="company-logo-input"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) setLogo(f); e.target.value = '' }}
+            />
             {(c?.logoPath || logo) && logo !== null && <Button size="sm" variant="ghost" onClick={() => setLogo(null)}>Remover</Button>}
-            <span className="truncate text-xs text-zinc-500">{logo ? logo.split('/').pop() : logo === null ? 'sem logotipo' : c?.logoPath ? 'logotipo atual' : ''}</span>
+            <span className="truncate text-xs text-zinc-500">{logo ? logo.name : logo === null ? 'sem logotipo' : c?.logoPath ? 'logotipo atual' : ''}</span>
           </div>
         </Field>
         {c && <div className="text-xs text-zinc-500">Cadastrada em {formatDate(c.createdAt)}</div>}

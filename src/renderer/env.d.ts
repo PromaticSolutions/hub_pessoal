@@ -1,12 +1,11 @@
-import type { Envelope } from '@shared/api'
+/// <reference types="vite/client" />
 
-declare global {
-  interface Window {
-    api: {
-      invoke(method: string, input: unknown): Promise<Envelope>
-      getPathForFile(file: File): string
-      onFlushRequest(cb: () => Promise<void>): void
-    }
-  }
+interface ImportMetaEnv {
+  readonly VITE_SUPABASE_URL?: string
+  readonly VITE_SUPABASE_ANON_KEY?: string
+  readonly VITE_DEV_AUTH?: string
 }
-export {}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
