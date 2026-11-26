@@ -13,7 +13,7 @@ type Manifest = ApiMethods['backup.inspect']['output']['manifest']
 function Section({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
   return (
     <section className="surface space-y-3 p-5" data-testid={id}>
-      <h2 className="font-semibold">{title}</h2>
+      <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
       {children}
     </section>
   )

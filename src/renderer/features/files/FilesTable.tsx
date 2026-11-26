@@ -35,7 +35,7 @@ export function FilesTable({ fixedProjectId }: { fixedProjectId?: number }) {
   const projects = allProjects(tree).filter((p) => !companyId || p.companyId === companyId)
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--line)] pb-3">
         <Input className="w-56" placeholder="Buscar por nome…" value={text} onChange={(e) => setText(e.target.value)} data-testid="files-search" />
         {!fixedProjectId && (
           <>

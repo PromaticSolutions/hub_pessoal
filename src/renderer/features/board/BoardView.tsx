@@ -355,7 +355,7 @@ export function BoardView({ boardId }: { boardId: number }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" ref={rootRef} data-testid={`board-${boardId}`}>
-      <div className="flex flex-wrap items-center gap-2 px-6 pb-2">
+      <div className="glass mx-6 mb-3 flex flex-wrap items-center gap-2 rounded-md px-3 py-2">
         <Input className="w-56" placeholder="Filtrar cartões…" value={filters.text} onChange={(e) => setFilters({ ...filters, text: e.target.value })} />
         <Select value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value as Priority | '' })}>
           <option value="">Todas as prioridades</option>

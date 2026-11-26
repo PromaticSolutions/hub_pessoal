@@ -88,7 +88,7 @@ function Section({ title, children, actions }: { title: string; children: ReactN
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</h3>
+        <h3 className="section-title">{title}</h3>
         {actions}
       </div>
       {children}

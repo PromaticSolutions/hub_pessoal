@@ -33,7 +33,7 @@ export function Button({ variant = 'secondary', size = 'md', className, ...p }: 
         'inline-flex items-center justify-center gap-1.5 rounded-[5px] font-medium transition duration-150 disabled:cursor-not-allowed disabled:opacity-50',
         size === 'sm' ? 'h-7 px-2 text-xs' : 'h-8 px-3 text-sm',
         variant === 'primary' && 'bg-indigo-600 text-white shadow-[0_1px_2px_rgba(79,70,229,.25),0_4px_10px_rgba(79,70,229,.18)] hover:-translate-y-px hover:bg-indigo-500 hover:shadow-[0_2px_4px_rgba(79,70,229,.25),0_8px_18px_rgba(79,70,229,.25)]',
-        variant === 'secondary' && 'border border-zinc-200 bg-white text-zinc-800 shadow-[0_1px_2px_rgba(16,24,40,.05)] hover:bg-zinc-50 hover:shadow-[0_2px_6px_rgba(16,24,40,.08)] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700',
+        variant === 'secondary' && 'border border-[var(--line-strong)] bg-[var(--surface)] text-zinc-800 shadow-[0_1px_2px_rgba(16,24,40,.05)] hover:border-zinc-300 hover:shadow-[0_2px_6px_rgba(16,24,40,.08)] dark:text-zinc-100 dark:hover:border-zinc-600',
         variant === 'danger' && 'bg-red-600 text-white shadow-[0_1px_2px_rgba(220,38,38,.25),0_4px_10px_rgba(220,38,38,.18)] hover:bg-red-500',
         variant === 'ghost' && 'text-zinc-600 hover:bg-zinc-200/60 dark:text-zinc-300 dark:hover:bg-zinc-800',
         className
@@ -48,7 +48,7 @@ export function Input({ className, ...p }: InputHTMLAttributes<HTMLInputElement>
       {...p}
       className={cx(
         !/(^|\s)w-/.test(className ?? '') && 'w-full',
-        'h-8 rounded-[5px] border border-zinc-200 bg-white px-2 text-sm shadow-[0_1px_2px_rgba(16,24,40,.04)] outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-900',
+        'h-8 rounded-[5px] border border-[var(--line-strong)] bg-[var(--surface)] px-2.5 text-sm shadow-[0_1px_2px_rgba(16,24,40,.04)] outline-none transition placeholder:text-zinc-400 hover:border-zinc-300 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 dark:hover:border-zinc-600',
         className
       )}
     />
@@ -60,7 +60,7 @@ export function Textarea({ className, ...p }: TextareaHTMLAttributes<HTMLTextAre
     <textarea
       {...p}
       className={cx(
-        'w-full rounded-[5px] border border-zinc-200 bg-white p-2 text-sm shadow-[0_1px_2px_rgba(16,24,40,.04)] outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 dark:border-zinc-700 dark:bg-zinc-900',
+        'w-full rounded-[5px] border border-[var(--line-strong)] bg-[var(--surface)] p-2.5 text-sm shadow-[0_1px_2px_rgba(16,24,40,.04)] outline-none transition placeholder:text-zinc-400 hover:border-zinc-300 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/15 dark:hover:border-zinc-600',
         className
       )}
     />
@@ -71,7 +71,7 @@ export { Select } from './Select'
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+    <label className="flex flex-col gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
       {label}
       <div className="text-sm font-normal text-zinc-900 dark:text-zinc-100">{children}</div>
     </label>
@@ -293,7 +293,7 @@ export function PageHeader({ title, children, testId = 'page-title' }: { title: 
 
 export function EmptyState({ text, children }: { text: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 p-10 text-sm text-zinc-500">
+    <div className="mx-6 flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-[var(--line-strong)] p-10 text-sm text-zinc-500">
       <div>{text}</div>
       {children}
     </div>
@@ -302,7 +302,7 @@ export function EmptyState({ text, children }: { text: string; children?: ReactN
 
 export function Tabs<T extends string>({ value, onChange, tabs }: { value: T; onChange: (v: T) => void; tabs: { value: T; label: string }[] }) {
   return (
-    <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800">
+    <div className="flex gap-1 border-b border-[var(--line)]">
       {tabs.map((t) => (
         <button
           key={t.value}
@@ -310,7 +310,7 @@ export function Tabs<T extends string>({ value, onChange, tabs }: { value: T; on
           onClick={() => onChange(t.value)}
           className={cx(
             '-mb-px border-b-2 px-3 py-2 text-sm',
-            value === t.value ? 'border-indigo-600 font-medium text-indigo-600' : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            value === t.value ? 'border-indigo-600 font-semibold text-indigo-700 dark:text-indigo-300' : 'border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-800 dark:hover:text-zinc-200'
           )}
         >
           {t.label}

@@ -40,7 +40,7 @@ function Kpi({ id, label, value, tone }: { id: string; label: string; value: num
       <div data-testid={`kpi-${id}`} className={cx('text-3xl font-semibold tabular-nums', tone === 'danger' && value > 0 && 'text-red-600', tone === 'warn' && value > 0 && 'text-amber-600')}>
         {value}
       </div>
-      <div className="mt-1 text-xs text-zinc-500">{label}</div>
+      <div className="mt-1 text-xs font-medium text-zinc-500">{label}</div>
     </div>
   )
 }
@@ -49,7 +49,7 @@ function TaskMiniList({ title, items, empty, testId }: { title: string; items: T
   const open = useOpenTask()
   return (
     <div className="surface lift p-4" data-testid={testId}>
-      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
+      <h3 className="mb-2 text-sm font-semibold tracking-tight">{title}</h3>
       {!items.length ? (
         <div className="text-xs text-zinc-500">{empty}</div>
       ) : (
@@ -74,7 +74,7 @@ function TaskMiniList({ title, items, empty, testId }: { title: string; items: T
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="surface lift p-4">
-      <h3 className="mb-3 text-sm font-semibold">{title}</h3>
+      <h3 className="mb-3 text-sm font-semibold tracking-tight">{title}</h3>
       {children}
     </div>
   )

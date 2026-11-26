@@ -197,7 +197,7 @@ export function SpaceTree() {
 
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold tracking-wider text-zinc-400">
+      <div className="section-title mb-1 flex items-center justify-between px-2">
         ESPAÇOS
         <button title="Nova empresa" className="rounded p-0.5 hover:bg-zinc-200 dark:hover:bg-zinc-700" onClick={() => d.openCompanyForm()}>
           <Plus size={14} />

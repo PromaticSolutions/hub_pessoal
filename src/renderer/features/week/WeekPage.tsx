@@ -74,7 +74,7 @@ export default function WeekPage() {
         </span>
         <Button variant="primary" data-testid="week-new-task" onClick={() => setCreating(true)}>Nova tarefa</Button>
       </PageHeader>
-      <div className="px-6 py-2"><TaskFilters value={filter} onChange={setFilter} /></div>
+      <div className="glass mx-6 mb-3 rounded-md px-3 py-2"><TaskFilters value={filter} onChange={setFilter} /></div>
       <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto px-6 pb-4">
         {columns.map((c) => (
           <div key={c.key} data-testid={`week-col-${c.key}`} className={cx('lane flex w-52 shrink-0 flex-col', c.highlight && 'ring-2 ring-indigo-500/70')}>

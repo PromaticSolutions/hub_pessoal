@@ -177,7 +177,7 @@ export default function CalendarPage() {
           <input type="checkbox" checked={showStarts} onChange={(e) => call('settings.set', { key: 'showStartMarkers', value: e.target.checked })} /> mostrar inícios
         </label>
       </PageHeader>
-      <div className="px-6 py-2"><TaskFilters value={filter} onChange={setFilter} /></div>
+      <div className="glass mx-6 mb-3 rounded-md px-3 py-2"><TaskFilters value={filter} onChange={setFilter} /></div>
       {view === 'month' ? (
         <MonthView anchor={anchor} weekStartsOn={weekStartsOn} byDay={byDay} onCreate={setCreateDate} onDay={(d) => { setAnchor(parseLocalDate(d)); setView('day') }} />
       ) : (
