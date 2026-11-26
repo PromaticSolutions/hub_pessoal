@@ -58,6 +58,9 @@ export function TabsProvider({ children }: { children: ReactNode }) {
 
   const go = useCallback(
     (next: T.TabsState) => {
+      // Save fields that persist on blur before the current page unmounts.
+      const el = document.activeElement as HTMLElement | null
+      if (el && el !== document.body) el.blur()
       const prevActive = stateRef.current.tabs.find((t) => t.id === stateRef.current.activeId)
       const active = next.tabs.find((t) => t.id === next.activeId)!
       setState(next)

@@ -107,7 +107,7 @@ export function getWidgetData(ctx: AppContext, input: { widget: { type: WidgetTy
     case 'taskList': {
       const limit = config.limit ?? 10
       if (config.list === 'nearDue') return { kind: 'taskList', items: dash().nearDueList.slice(0, limit) }
-      if (config.list === 'filter') return { kind: 'taskList', items: queryTasks(ctx, { filter: { ...scopeFilter(scope), ...(config.filter ?? {}) }, sort: 'due', limit }) }
+      if (config.list === 'filter') return { kind: 'taskList', items: queryTasks(ctx, { filter: { includeDone: false, ...scopeFilter(scope), ...(config.filter ?? {}) }, sort: 'due', limit }) }
       return { kind: 'taskList', items: dash().overdueList.slice(0, limit) }
     }
     case 'projects': {
