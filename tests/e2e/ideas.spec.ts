@@ -1,0 +1,38 @@
+import { test, expect } from '@playwright/test'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { invoke, launchApp, makeTempDir, pick } from '../helpers/app'
+
+test('ideias: criar rápido, editar, anexar, transformar em tarefa e buscar', async () => {
+  const { app, page } = await launchApp(makeTempDir('pth-ideas-'))
+  const p = await invoke(page, 'projects.create', { companyId: 1, folderId: null, name: 'Produto', color: '#000' })
+  await page.getByTestId('nav-ideas').click()
+  await page.getByTestId('idea-quick').fill('Portal do cliente')
+  await page.keyboard.press('Enter')
+  const [idea] = await invoke(page, 'ideas.list', {})
+  await page.getByTestId(`idea-card-${idea.id}`).click()
+  await expect(page.getByTestId('idea-modal')).toBeVisible()
+  await page.getByTestId('idea-category').fill('Negócio')
+  await page.getByTestId('idea-new-label').fill('Cliente')
+  await page.keyboard.press('Enter')
+  await pick(page, 'idea-status', 'analysis')
+  const file = join(makeTempDir('pth-ideaf-'), 'mockup.txt')
+  writeFileSync(file, 'tela inicial')
+  await page.getByTestId('idea-attach-input').setInputFiles(file)
+  await expect(page.getByTestId('idea-modal')).toContainText('mockup.txt')
+  await page.getByTestId('idea-to-task').click()
+  await pick(page, 'idea-convert-target', String(p.id))
+  await page.getByTestId('idea-convert-ok').click()
+  await expect(page.getByTestId('idea-open-task')).toBeVisible()
+  const detail = await invoke(page, 'ideas.get', { id: idea.id })
+  expect(detail).toMatchObject({ category: 'Negócio', status: 'developing' })
+  const task = await invoke(page, 'tasks.get', { id: detail.convertedTaskId })
+  expect(task).toMatchObject({ title: 'Portal do cliente', project: { id: p.id } })
+  expect(task.labels.map((l: { name: string }) => l.name)).toEqual(['Cliente'])
+  expect(task.attachments[0].originalName).toBe('mockup.txt')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Control+k')
+  await page.getByTestId('palette-input').fill('portal')
+  await expect(page.getByTestId(`palette-row-i${idea.id}`)).toBeVisible()
+  await app.close()
+})

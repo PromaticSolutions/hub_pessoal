@@ -1,4 +1,4 @@
-import { Building2, CalendarClock, CalendarDays, CalendarRange, LayoutDashboard, ListChecks, Paperclip, Search, Settings } from 'lucide-react'
+import { Building2, CalendarClock, CalendarDays, CalendarRange, LayoutDashboard, Lightbulb, ListChecks, Paperclip, Search, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cx } from '../lib/format'
 import { SpaceTree } from './SpaceTree'
@@ -46,6 +46,7 @@ export function Sidebar() {
           <Item to="/week" icon={<CalendarRange size={16} />} label="Minha semana" testId="nav-week" />
           <Item to="/all" icon={<ListChecks size={16} />} label="Todas as Tarefas" testId="nav-all" />
           <Item to="/calendar" icon={<CalendarDays size={16} />} label="Calendário" testId="nav-calendar" />
+          <Item to="/ideas" icon={<Lightbulb size={16} />} label="Ideias" testId="nav-ideas" />
           <Item to="/files" icon={<Paperclip size={16} />} label="Arquivos" testId="nav-files" />
           <Item to="/companies" icon={<Building2 size={16} />} label="Empresas" testId="nav-companies" />
         </nav>

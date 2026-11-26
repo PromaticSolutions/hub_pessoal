@@ -9,7 +9,7 @@ import { Highlight } from './CommandPalette'
 import { attachmentOrigin } from '../../lib/attachmentOrigin'
 import { useOpenTask } from '../board/BoardView'
 
-type Tab = 'tasks' | 'comments' | 'projects' | 'companies' | 'attachments'
+type Tab = 'tasks' | 'comments' | 'projects' | 'companies' | 'attachments' | 'ideas'
 
 export default function SearchPage() {
   const [params, setParams] = useSearchParams()
@@ -25,7 +25,7 @@ export default function SearchPage() {
     return () => clearTimeout(t)
   }, [text, q, params, setParams])
   const { data } = useApiQuery('search.query', { text: q, filter, limit: 200 }, { enabled: !!q.trim() })
-  const counts = { tasks: data?.tasks.length ?? 0, comments: data?.comments.length ?? 0, projects: data?.projects.length ?? 0, companies: data?.companies.length ?? 0, attachments: data?.attachments.length ?? 0 }
+  const counts = { tasks: data?.tasks.length ?? 0, comments: data?.comments.length ?? 0, projects: data?.projects.length ?? 0, companies: data?.companies.length ?? 0, attachments: data?.attachments.length ?? 0, ideas: data?.ideas.length ?? 0 }
   return (
     <div className="flex-1 overflow-y-auto">
       <PageHeader title="Busca" />
@@ -57,7 +57,8 @@ export default function SearchPage() {
             { value: 'comments', label: `Comentários (${counts.comments})` },
             { value: 'projects', label: `Projetos (${counts.projects})` },
             { value: 'companies', label: `Empresas (${counts.companies})` },
-            { value: 'attachments', label: `Arquivos (${counts.attachments})` }
+            { value: 'attachments', label: `Arquivos (${counts.attachments})` },
+            { value: 'ideas', label: `Ideias (${counts.ideas})` }
           ]}
         />
         {!q.trim() ? (
@@ -87,6 +88,12 @@ export default function SearchPage() {
             ))}
             {tab === 'companies' && data.companies.map((c) => (
               <Link key={c.id} to={`/spaces/${c.id}`} className="flex items-center gap-2 rounded p-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"><Dot color={c.color} /> {c.name}</Link>
+            ))}
+            {tab === 'ideas' && data.ideas.map((i) => (
+              <Link key={i.id} to={`/ideas?idea=${i.id}`} className="block rounded p-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900">
+                <div className="font-medium">{i.title}</div>
+                <div className="truncate text-xs text-zinc-500"><Highlight text={i.snippet} /></div>
+              </Link>
             ))}
             {tab === 'attachments' && data.attachments.map((a) => (
               <Link key={a.id} to={attachmentOrigin(a).href} className="flex items-center gap-2 rounded p-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900">

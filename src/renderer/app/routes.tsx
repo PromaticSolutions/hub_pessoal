@@ -14,6 +14,7 @@ import SearchPage from '../features/search/SearchPage'
 import SettingsPage from '../features/settings/SettingsPage'
 import AllTasksPage from '../features/all-tasks/AllTasksPage'
 import MyDayPage from '../features/my-day/MyDayPage'
+import IdeasPage from '../features/ideas/IdeasPage'
 import { EmptyState, PageHeader } from '../components/ui'
 
 function NotFoundPage() {
@@ -49,6 +50,7 @@ export function AppRoutes() {
           <Route path="/week" element={<WeekPage />} />
           <Route path="/all" element={<AllTasksPage />} />
           <Route path="/day" element={<MyDayPage />} />
+          <Route path="/ideas" element={<IdeasPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/files" element={<FilesPage />} />
           <Route path="/companies" element={<CompaniesPage />} />
