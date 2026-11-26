@@ -30,13 +30,13 @@ function txDb(s: postgres.TransactionSql): Db {
 
 /**
  * Production Db over postgres.js. `prepare: false` because the Supabase transaction pooler
- * (port 6543) does not keep prepared statements; one connection per serverless instance.
+ * does not keep prepared statements. Use the SESSION pooler (5432): through the transaction pooler (6543) postgres.js pipelined queries hang.
  */
 export function createPgDb(url: string): Db {
   const numberType = { to: 20, from: [...NUMBER_OIDS], serialize: (v: unknown) => String(v), parse: parseNumber }
   const sql = postgres(url, {
     prepare: false,
-    max: 1,
+    max: 3,
     idle_timeout: 20,
     onnotice: () => {},
     types: { number8: numberType }
