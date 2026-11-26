@@ -36,7 +36,7 @@ export function createPgDb(url: string): Db {
   const numberType = { to: 20, from: [...NUMBER_OIDS], serialize: (v: unknown) => String(v), parse: parseNumber }
   const sql = postgres(url, {
     prepare: false,
-    max: 3,
+    max: 8,
     idle_timeout: 20,
     onnotice: () => {},
     types: { number8: numberType }
