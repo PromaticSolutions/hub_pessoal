@@ -11,6 +11,10 @@ type Ctx = {
   move(id: string, toIndex: number): void
   cycle(dir: 1 | -1): void
   activateIndex(n: number): void
+  back(): void
+  forward(): void
+  canBack: boolean
+  canForward: boolean
 }
 
 const TabsCtx = createContext<Ctx | null>(null)
@@ -77,7 +81,11 @@ export function TabsProvider({ children }: { children: ReactNode }) {
     activate: (id) => go(T.activate(stateRef.current, id)),
     move: (id, i) => setState((s) => T.moveTab(s, id, i)),
     cycle: (dir) => go(T.cycle(stateRef.current, dir)),
-    activateIndex: (n) => go(T.activateIndex(stateRef.current, n))
+    activateIndex: (n) => go(T.activateIndex(stateRef.current, n)),
+    back: () => go(T.goHistory(stateRef.current, -1)),
+    forward: () => go(T.goHistory(stateRef.current, 1)),
+    canBack: T.canGoBack(state),
+    canForward: T.canGoForward(state)
   }
   return <TabsCtx.Provider value={value}>{children}</TabsCtx.Provider>
 }

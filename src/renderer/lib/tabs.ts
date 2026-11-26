@@ -1,9 +1,11 @@
 /** Browser-like tabs: pure state transitions (persisted per device in localStorage 'hub.tabs.state'). */
-export type Tab = { id: string; path: string; pinned?: boolean }
+/** `back`/`fwd`: this tab's own history (like a browser tab), newest last / next first. */
+export type Tab = { id: string; path: string; pinned?: boolean; back?: string[]; fwd?: string[] }
 export type TabsState = { tabs: Tab[]; activeId: string }
 
 export const HOME_TAB_ID = 'home'
 export const MAX_TABS = 20
+export const MAX_HISTORY = 30
 
 let seq = 0
 const newId = () => `t${Date.now().toString(36)}${(seq++).toString(36)}${Math.random().toString(36).slice(2, 6)}`
@@ -29,7 +31,11 @@ export function initialTabs(saved: unknown, lastRoute?: string): TabsState {
   if (s && Array.isArray(s.tabs)) {
     const valid = s.tabs.filter((t): t is Tab => !!t && typeof t.id === 'string' && typeof t.path === 'string' && t.path.startsWith('/'))
     const homeTab = valid.find((t) => t.id === HOME_TAB_ID)
-    const others = valid.filter((t) => t.id !== HOME_TAB_ID).slice(-(MAX_TABS - 1)).map((t) => ({ id: t.id, path: stripTransient(t.path) }))
+    const hist = (h: unknown) => (Array.isArray(h) ? h.filter((p): p is string => typeof p === 'string' && p.startsWith('/')).slice(-MAX_HISTORY) : [])
+    const others = valid
+      .filter((t) => t.id !== HOME_TAB_ID)
+      .slice(-(MAX_TABS - 1))
+      .map((t) => ({ id: t.id, path: stripTransient(t.path), back: hist(t.back), fwd: hist(t.fwd) }))
     const tabs = [home(homeTab && isDashboardPath(homeTab.path) ? homeTab.path : '/'), ...others]
     const activeId = tabs.some((t) => t.id === s.activeId) ? (s.activeId as string) : HOME_TAB_ID
     return { tabs, activeId }
@@ -67,8 +73,36 @@ export function openTab(s: TabsState, path: string, opts: { activate?: boolean }
 export function navigate(s: TabsState, path: string): TabsState {
   const clean = stripTransient(path)
   if (isDashboardPath(clean)) return openTab(s, clean)
-  if (s.activeId === HOME_TAB_ID) return openTab(s, clean)
-  return { ...s, tabs: s.tabs.map((t) => (t.id === s.activeId ? { ...t, path: clean } : t)) }
+  if (s.activeId === HOME_TAB_ID) {
+    const from = s.tabs.find((t) => t.id === HOME_TAB_ID)!.path
+    const next = openTab(s, clean)
+    const created = !s.tabs.some((t) => t.id === next.activeId)
+    return created ? { ...next, tabs: next.tabs.map((t) => (t.id === next.activeId ? { ...t, back: [from], fwd: [] } : t)) } : next
+  }
+  const cur = s.tabs.find((t) => t.id === s.activeId)
+  if (!cur || cur.path === clean) return s
+  const back = [...(cur.back ?? []), cur.path].slice(-MAX_HISTORY)
+  return { ...s, tabs: s.tabs.map((t) => (t.id === s.activeId ? { ...t, path: clean, back, fwd: [] } : t)) }
+}
+
+export const canGoBack = (s: TabsState) => !!s.tabs.find((t) => t.id === s.activeId)?.back?.length
+export const canGoForward = (s: TabsState) => !!s.tabs.find((t) => t.id === s.activeId)?.fwd?.length
+
+/** Moves the active tab one step through its own history. Going back to the Dashboard activates the pinned tab. */
+export function goHistory(s: TabsState, dir: -1 | 1): TabsState {
+  const cur = s.tabs.find((t) => t.id === s.activeId)
+  if (!cur || cur.pinned) return s
+  const back = [...(cur.back ?? [])]
+  const fwd = [...(cur.fwd ?? [])]
+  const target = dir < 0 ? back.pop() : fwd.shift()
+  if (!target) return s
+  if (dir < 0) fwd.unshift(cur.path)
+  else back.push(cur.path)
+  if (isDashboardPath(target)) {
+    // The tab keeps its page; the Dashboard lives in the pinned tab.
+    return { tabs: s.tabs.map((t) => (t.id === cur.id ? { ...t, back: dir < 0 ? back : t.back, fwd: dir < 0 ? t.fwd : fwd } : t)), activeId: HOME_TAB_ID }
+  }
+  return { ...s, tabs: s.tabs.map((t) => (t.id === cur.id ? { ...t, path: target, back: back.slice(-MAX_HISTORY), fwd: fwd.slice(0, MAX_HISTORY) } : t)) }
 }
 
 export function activate(s: TabsState, id: string): TabsState {

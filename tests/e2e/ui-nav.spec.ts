@@ -1,0 +1,30 @@
+import { test, expect } from '@playwright/test'
+import { launchApp, makeTempDir } from '../helpers/app'
+
+test('voltar/avançar por aba, atualizar e esconder o menu lateral', async () => {
+  const { app, page } = await launchApp(makeTempDir('pth-uinav-'))
+  await page.getByTestId('nav-week').click()
+  await expect(page.getByTestId('page-title')).toContainText('Minha semana')
+  await page.getByTestId('nav-calendar').click()
+  await expect(page.getByTestId('page-title')).toContainText('Calendário')
+  await expect(page.getByTestId('nav-forward')).toBeDisabled()
+  await page.getByTestId('nav-back').click()
+  await expect(page.getByTestId('page-title')).toContainText('Minha semana')
+  await page.getByTestId('nav-forward').click()
+  await expect(page.getByTestId('page-title')).toContainText('Calendário')
+  await page.keyboard.press('Alt+ArrowLeft')
+  await expect(page.getByTestId('page-title')).toContainText('Minha semana')
+  await page.getByTestId('nav-refresh').click()
+  await expect(page.getByTestId('page-title')).toContainText('Minha semana')
+
+  await page.getByTestId('sidebar-toggle').click()
+  await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true')
+  await expect(page.getByTestId('nav-week')).not.toContainText('Minha semana')
+  await page.getByTestId('nav-files').click()
+  await expect(page.getByTestId('page-title')).toContainText('Arquivos')
+  await page.reload()
+  await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true')
+  await page.keyboard.press('Control+b')
+  await expect(page.getByTestId('sidebar')).not.toHaveAttribute('data-collapsed', 'true')
+  await app.close()
+})

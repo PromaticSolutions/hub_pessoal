@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { CalendarClock, CalendarDays, CalendarRange, FolderKanban, LayoutDashboard, Lightbulb, ListChecks, Paperclip, Plus, Search, Settings, ShoppingCart, Building2, X, CircleAlert } from 'lucide-react'
+import { CalendarClock, CalendarDays, CalendarRange, ChevronLeft, ChevronRight, FolderKanban, LayoutDashboard, Lightbulb, ListChecks, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, RotateCw, Search, Settings, ShoppingCart, Building2, X, CircleAlert } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useApiQuery } from '../lib/queries'
 import { cx } from '../lib/format'
@@ -25,8 +26,30 @@ function isTyping(e: KeyboardEvent) {
   return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable
 }
 
-export function TabBar() {
+function ToolButton({ label, onClick, disabled, testId, children }: { label: string; onClick: () => void; disabled?: boolean; testId: string; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="rounded-[4px] p-1.5 text-zinc-500 transition-colors hover:bg-white/70 hover:text-zinc-800 disabled:pointer-events-none disabled:opacity-35 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+    >
+      {children}
+    </button>
+  )
+}
+
+export function TabBar({ sidebarCollapsed = false, onToggleSidebar }: { sidebarCollapsed?: boolean; onToggleSidebar?: () => void }) {
   const tabs = useTabs()
+  const qc = useQueryClient()
+  const [spinning, setSpinning] = useState(false)
+  const refresh = () => {
+    setSpinning(true)
+    qc.invalidateQueries().finally(() => setTimeout(() => setSpinning(false), 300))
+  }
   const { data: tree } = useApiQuery('spaces.tree', { includeArchived: true })
   const [dragId, setDragId] = useState<string | null>(null)
 
@@ -35,6 +58,7 @@ export function TabBar() {
       const k = e.key.toLowerCase()
       // Browsers reserve Ctrl+T/W/Tab, so Alt variants work everywhere (Ctrl ones kept where the browser lets them through).
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (k === 'arrowleft' || k === 'arrowright') { if (isTyping(e)) return; e.preventDefault(); if (k === 'arrowleft') tabs.back(); else tabs.forward(); return }
         if (k === 'pagedown' || k === 'pageup') { e.preventDefault(); tabs.cycle(k === 'pagedown' ? 1 : -1); return }
         const digit = /^Digit([1-9])$/.exec(e.code)?.[1] ?? (/^[1-9]$/.test(k) ? k : null)
         if (digit) { e.preventDefault(); tabs.activateIndex(digit === '9' ? tabs.state.tabs.length - 1 : Number(digit) - 1); return }
@@ -46,16 +70,37 @@ export function TabBar() {
       if (!(e.ctrlKey || e.metaKey)) return
       if (k === 'tab') { e.preventDefault(); tabs.cycle(e.shiftKey ? -1 : 1); return }
       if (isTyping(e)) return
+      if (k === 'b' && !e.shiftKey) { e.preventDefault(); onToggleSidebar?.(); return }
       if (k === 't') { e.preventDefault(); tabs.open('/all') }
       else if (k === 'w') { e.preventDefault(); tabs.close(tabs.state.activeId) }
       else if (/^[1-9]$/.test(k)) { e.preventDefault(); tabs.activateIndex(k === '9' ? tabs.state.tabs.length - 1 : Number(k) - 1) }
     }
+    // Mouse side buttons (3 = back, 4 = forward) move through the active tab's history.
+    const onMouse = (e: MouseEvent) => {
+      if (e.button !== 3 && e.button !== 4) return
+      e.preventDefault()
+      if (e.button === 3) tabs.back()
+      else tabs.forward()
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [tabs])
+    window.addEventListener('mouseup', onMouse)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('mouseup', onMouse)
+    }
+  }, [tabs, onToggleSidebar])
 
   return (
-    <div className="glass mb-3 flex h-10 shrink-0 items-end gap-1 overflow-x-auto rounded-md px-1.5 pt-1.5" role="tablist" aria-label="Abas abertas">
+    <div className="glass mb-3 flex h-10 shrink-0 items-center rounded-md px-1.5">
+      <div className="mr-1 flex shrink-0 items-center gap-0.5 border-r border-[var(--line)] pr-1.5">
+        <ToolButton testId="sidebar-toggle" label={sidebarCollapsed ? 'Mostrar menu lateral (Ctrl+B)' : 'Esconder menu lateral (Ctrl+B)'} onClick={() => onToggleSidebar?.()}>
+          {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </ToolButton>
+        <ToolButton testId="nav-back" label="Voltar (Alt+←)" disabled={!tabs.canBack} onClick={tabs.back}><ChevronLeft size={16} /></ToolButton>
+        <ToolButton testId="nav-forward" label="Avançar (Alt+→)" disabled={!tabs.canForward} onClick={tabs.forward}><ChevronRight size={16} /></ToolButton>
+        <ToolButton testId="nav-refresh" label="Atualizar dados" onClick={refresh}><RotateCw size={15} className={cx(spinning && 'animate-spin')} /></ToolButton>
+      </div>
+    <div className="flex h-full min-w-0 flex-1 items-end gap-1 overflow-x-auto pt-1.5" role="tablist" aria-label="Abas abertas">
       {tabs.state.tabs.map((t, i) => {
         const info = routeTitle(t.path, tree)
         const isActive = t.id === tabs.state.activeId
@@ -101,6 +146,7 @@ export function TabBar() {
       <button type="button" data-testid="tab-new" aria-label="Nova aba" title="Nova aba (Alt+T)" onClick={() => tabs.open('/all')} className="mb-1 ml-1 rounded-[4px] p-1 text-zinc-500 hover:bg-white/70 hover:text-zinc-800 dark:hover:bg-zinc-800">
         <Plus size={15} />
       </button>
+    </div>
     </div>
   )
 }
