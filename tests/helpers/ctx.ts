@@ -1,17 +1,27 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AppContext } from '@main/context'
+import type { AppContext } from '@server/context'
+import { createLocalStorage } from '@server/storage/local'
 import { createTestDb } from './db'
 
-export function createTestCtx(now: Date = new Date(2026, 10, 25, 12, 0)) {
-  const t = createTestDb()
+/** Fresh migrated + seeded database and a local Storage in a temporary folder. */
+export async function createTestCtx(now: Date = new Date(2026, 10, 25, 12, 0)): Promise<{
+  ctx: AppContext
+  setNow(d: Date): void
+  cleanup(): Promise<void>
+}> {
+  const t = await createTestDb()
+  const filesRoot = mkdtempSync(join(tmpdir(), 'pth-files-'))
   let current = now
-  const ctx: AppContext = { db: t.db, paths: t.paths, now: () => current }
+  const ctx: AppContext = { db: t.db, storage: createLocalStorage(filesRoot), now: () => current }
   return {
     ctx,
     setNow(d: Date) { current = d },
-    cleanup: t.cleanup
+    async cleanup() {
+      await t.cleanup()
+      rmSync(filesRoot, { recursive: true, force: true })
+    }
   }
 }
 

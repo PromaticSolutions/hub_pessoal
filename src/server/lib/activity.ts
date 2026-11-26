@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3'
+import type { Db } from '../db/db'
 
 export type ActivityInput = {
   entityType: 'task' | 'project' | 'company' | 'board' | 'folder'
@@ -14,9 +14,10 @@ export type ActivityInput = {
 const ser = (v: unknown): string | null =>
   v === undefined || v === null ? null : typeof v === 'string' ? v : JSON.stringify(v)
 
-export function logActivity(db: Database.Database, e: ActivityInput): void {
-  db.prepare(
+export async function logActivity(db: Db, e: ActivityInput): Promise<void> {
+  await db.run(
     `INSERT INTO activity_log(entity_type, entity_id, task_id, action, field, old_value, new_value, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, coalesce(?, strftime('%Y-%m-%dT%H:%M:%fZ','now')))`
-  ).run(e.entityType, e.entityId, e.taskId ?? null, e.action, e.field ?? null, ser(e.oldValue), ser(e.newValue), e.at ?? null)
+     VALUES (?, ?, ?, ?, ?, ?, ?, coalesce(?, iso_now()))`,
+    [e.entityType, e.entityId, e.taskId ?? null, e.action, e.field ?? null, ser(e.oldValue), ser(e.newValue), e.at ?? null]
+  )
 }

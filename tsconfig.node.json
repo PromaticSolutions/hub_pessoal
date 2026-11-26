@@ -9,8 +9,8 @@
     "resolveJsonModule": true,
     "types": ["node", "vitest/globals"],
     "baseUrl": ".",
-    "paths": { "@shared/*": ["src/shared/*"], "@main/*": ["src/main/*"] },
+    "paths": { "@shared/*": ["src/shared/*"], "@server/*": ["src/server/*"] },
     "noEmit": true
   },
-  "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "tests/**/*", "*.config.ts", "*.config.mts"]
+  "include": ["src/server/**/*", "src/preload/**/*", "scripts/**/*", "src/shared/**/*", "tests/**/*", "*.config.ts", "*.config.mts"]
 }
