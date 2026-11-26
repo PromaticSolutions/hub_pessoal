@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "e2e": "npm run build && playwright test",
-    "dist": "electron-vite build && electron-builder --linux dir"
+    "dist": "electron-vite build && electron-builder --linux dir",
+    "db:migrate": "tsx --tsconfig tsconfig.node.json --import ./scripts/raw-loader.mjs scripts/migrate.ts",
+    "import:sqlite": "tsx --tsconfig tsconfig.node.json --import ./scripts/raw-loader.mjs scripts/import-sqlite.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.119.0",
@@ -50,6 +52,7 @@
     "recharts": "3.11.1",
     "remark-gfm": "4.0.1",
     "tailwindcss": "4.3.5",
+    "tsx": "4.23.15",
     "typescript": "5.9.3",
     "vite": "8.3.8",
     "vitest": "4.1.12"

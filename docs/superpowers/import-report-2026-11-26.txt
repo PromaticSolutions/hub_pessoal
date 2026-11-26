@@ -1,0 +1,52 @@
+Importação SQLite (desktop v7) → Supabase (Postgres schema v1 + Storage hub-files) — 2026-11-26
+Comandos: npm run db:migrate (sem seed: "Esquema migrado: versão 0 → 1."), depois npm run import:sqlite (sem --replace).
+Código de saída: 0. O hub.db original não foi alterado (sha1 igual antes e depois; só a cópia VACUUM INTO foi lida).
+
+Origem: /home/guest/.local/share/personal-task-hub/hub.db
+Arquivos: /home/guest/.local/share/personal-task-hub
+Bucket hub-files: created
+Lendo cópia do banco SQLite…
+Importando linhas (uma transação)…
+Enviando 4 arquivo(s)…
+Conferindo…
+
+tabela            | origem | destino | ok
+------------------|--------|---------|----
+companies         |      4 |       4 | ok
+folders           |      0 |       0 | ok
+projects          |     13 |      13 | ok
+boards            |     15 |      15 | ok
+columns           |     76 |      76 | ok
+tasks             |     42 |      42 | ok
+labels            |      3 |       3 | ok
+task_labels       |      5 |       5 | ok
+comments          |      2 |       2 | ok
+checklists        |      7 |       7 | ok
+checklist_items   |      0 |       0 | ok
+ideas             |      0 |       0 | ok
+idea_labels       |      0 |       0 | ok
+attachments       |      4 |       4 | ok
+activity_log      |    248 |     248 | ok
+settings          |     15 |      15 | ok
+day_blocks        |      4 |       4 | ok
+shopping_items    |      0 |       0 | ok
+dashboards        |      1 |       1 | ok
+dashboard_widgets |     14 |      14 | ok
+
+soma de verificação (md5 das linhas ordenadas por id):
+  tasks             903b46ce612c306560028fb4f4f1c952 = 903b46ce612c306560028fb4f4f1c952 ok
+  projects          6ab7b3472d4a9f505ff477369895cd63 = 6ab7b3472d4a9f505ff477369895cd63 ok
+  comments          1a04304bb65aa38c3fcf33477761296e = 1a04304bb65aa38c3fcf33477761296e ok
+  ideas             d751713988987e9331980363e24189ce = d751713988987e9331980363e24189ce ok
+  shopping_items    d751713988987e9331980363e24189ce = d751713988987e9331980363e24189ce ok
+
+arquivos: 4 enviados, 4 conferidos (tamanho), 242487 bytes
+
+RESULTADO: ok
+
+Conferência extra após a importação (somente leitura):
+  search_index: task 42, project 13, company 4, comment 2, attachment 4 (reconstruído pelos gatilhos)
+  v_tasks: 42 linhas; schema_version = 1; sequência de tasks continua em 43 (max id 42)
+  anon/authenticated sem privilégio de SELECT em tasks
+  4 anexos: size_bytes do banco = tamanho no Storage; download por URL assinada ok (HTTP 200)
+  Logos: nenhuma empresa tem logo_path; a pasta logos/ está vazia.
