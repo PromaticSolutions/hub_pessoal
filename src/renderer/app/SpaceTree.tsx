@@ -1,5 +1,5 @@
 import { useState, type DragEvent, type ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { AppNavLink, useTabs } from './tabs-context'
 import { ChevronDown, ChevronRight, Folder as FolderIcon, MoreHorizontal, Plus } from 'lucide-react'
 import type { Company, Project } from '@shared/types'
 import type { ApiMethods } from '@shared/api'
@@ -90,6 +90,7 @@ export function SpaceTree() {
   const exp = useExpanded()
   const call = useCall()
   const d = useDialogs()
+  const tabs = useTabs()
 
   const dropInto = (companyId: number, folderId: number | null) => async (item: DragItem) => {
     if (item.kind === 'project') await call('projects.move', { id: item.id, companyId, folderId, beforeId: null, afterId: null })
@@ -105,16 +106,17 @@ export function SpaceTree() {
   const projectRow = (p: Project, siblings: Project[], depth: number) => (
     <Row key={`p${p.id}`} depth={depth} dragItem={{ kind: 'project', id: p.id }} onDrop={dropBeforeProject(p, siblings)} testId={`tree-project-${p.id}`}>
       <span className="w-4" />
-      <NavLink
+      <AppNavLink
         to={`/projects/${p.id}`}
         className={({ isActive }) => cx('flex min-w-0 flex-1 items-center gap-2 rounded-[5px] px-1.5 py-1 transition-colors', isActive ? 'bg-indigo-50 font-semibold text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/60')}
       >
         <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: p.color }} />
         <span className="truncate">{p.name}</span>
-      </NavLink>
+      </AppNavLink>
       <Menu
         trigger={<button className="invisible rounded p-0.5 group-hover:visible hover:bg-zinc-200 dark:hover:bg-zinc-700"><MoreHorizontal size={14} /></button>}
         items={[
+          { label: 'Abrir em nova aba', testId: `tree-open-tab-${p.id}`, onClick: () => tabs.open(`/projects/${p.id}`) },
           { label: 'Editar', onClick: () => d.openProjectForm({ companyId: p.companyId, folderId: p.folderId, project: p }) },
           { label: 'Arquivar', onClick: () => d.archiveProject(p) },
           'separator',
@@ -169,13 +171,13 @@ export function SpaceTree() {
           <button className="rounded p-0.5 hover:bg-zinc-200 dark:hover:bg-zinc-700" onClick={() => exp.toggle(key)}>
             {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
-          <NavLink
+          <AppNavLink
             to={`/spaces/${c.id}`}
             className={({ isActive }) => cx('flex min-w-0 flex-1 items-center gap-2 rounded-[5px] px-1.5 py-1 transition-colors font-medium', isActive ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/60')}
           >
             <Dot color={c.color} />
             <span className="truncate">{c.name}</span>
-          </NavLink>
+          </AppNavLink>
           <Menu
             trigger={<button data-testid={`tree-company-menu-${c.id}`} className="invisible rounded p-0.5 group-hover:visible hover:bg-zinc-200 dark:hover:bg-zinc-700"><Plus size={14} /></button>}
             items={[

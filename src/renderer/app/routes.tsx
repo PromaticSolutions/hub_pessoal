@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Route, Routes, useLocation } from 'react-router-dom'
+import { TabsProvider } from './tabs-context'
 import { api } from '../lib/api'
 import { Layout } from './Layout'
 import DashboardPage from '../features/dashboard/DashboardPage'
@@ -11,21 +12,23 @@ import SpacePage from '../features/companies/SpacePage'
 import ProjectPage from '../features/projects/ProjectPage'
 import SearchPage from '../features/search/SearchPage'
 import SettingsPage from '../features/settings/SettingsPage'
+import { EmptyState, PageHeader } from '../components/ui'
 
+function NotFoundPage() {
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <PageHeader title="Página não encontrada" />
+      <EmptyState text="Esta aba aponta para uma página que não existe mais. Feche a aba ou use o menu lateral." />
+    </div>
+  )
+}
+
+/** Keeps the v1 'lastRoute' setting updated (tabs restore is done by TabsProvider). */
 function RouteMemory() {
   const loc = useLocation()
-  const nav = useNavigate()
-  const restored = useRef(false)
+  const first = useRef(true)
   useEffect(() => {
-    if (restored.current) return
-    restored.current = true
-    if (loc.pathname !== '/' || loc.search) return
-    api('settings.get', { key: 'lastRoute' }).then((r) => {
-      if (typeof r === 'string' && r !== '/' && !r.includes('task=')) nav(r, { replace: true })
-    }).catch(() => {})
-  }, [loc.pathname, loc.search, nav])
-  useEffect(() => {
-    if (!restored.current) return
+    if (first.current) { first.current = false; return }
     const params = new URLSearchParams(loc.search)
     params.delete('task')
     const qs = params.toString()
@@ -36,7 +39,7 @@ function RouteMemory() {
 
 export function AppRoutes() {
   return (
-    <>
+    <TabsProvider>
       <RouteMemory />
       <Routes>
         <Route element={<Layout />}>
@@ -50,8 +53,9 @@ export function AppRoutes() {
           <Route path="/projects/:projectId/boards/:boardId" element={<ProjectPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
-    </>
+    </TabsProvider>
   )
 }

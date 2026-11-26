@@ -8,13 +8,16 @@ import { Button, EmptyState, Menu, PageHeader, Tabs } from '../../components/ui'
 import { useApiQuery, useCall } from '../../lib/queries'
 import { formatDate } from '../../lib/format'
 import { useDialogs } from './dialogs'
+import { useNewTabHandlers } from '../../app/tabs-context'
 import { CompanyLogo } from './CompanyLogo'
 
 type FolderNode = ApiMethods['spaces.tree']['output'][number]['folders'][number]
 
 function ProjectCard({ p }: { p: Project }) {
+  const h = useNewTabHandlers(`/projects/${p.id}`)
   return (
     <Link
+      {...h}
       to={`/projects/${p.id}`}
       data-testid={`project-card-${p.id}`}
       className="surface lift block p-3.5"

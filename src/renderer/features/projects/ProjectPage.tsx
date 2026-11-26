@@ -7,6 +7,7 @@ import { Button, Dot, Input, Menu, PageHeader, Select, Tabs, Textarea, useConfir
 import { useApiQuery, useCall } from '../../lib/queries'
 import { formatDate, cx } from '../../lib/format'
 import { useDialogs } from '../companies/dialogs'
+import { useTabs } from '../../app/tabs-context'
 import { BoardView } from '../board/BoardView'
 import { ProjectFiles } from '../files/ProjectFiles'
 
@@ -21,6 +22,7 @@ export default function ProjectPage() {
   const { data: allBoards } = useApiQuery('boards.list', { projectId, includeArchived: true })
   const call = useCall()
   const d = useDialogs()
+  const tabs = useTabs()
   const prompt = usePrompt()
   const confirm = useConfirm()
   const [name, setName] = useState('')
@@ -103,6 +105,7 @@ export default function ProjectPage() {
                 <Menu
                   trigger={<button className="invisible pr-1 group-hover:visible"><MoreHorizontal size={14} /></button>}
                   items={[
+                    { label: 'Abrir em nova aba', onClick: () => tabs.open(`/projects/${projectId}/boards/${b.id}`) },
                     { label: 'Renomear', onClick: async () => { const n = await prompt({ title: 'Renomear quadro', initial: b.name }); if (n) call('boards.update', { id: b.id, name: n }) } },
                     { label: 'Mover para a esquerda', onClick: () => { const i = boards.indexOf(b); if (i > 0) call('boards.reorder', { id: b.id, beforeId: boards[i - 2]?.id ?? null, afterId: boards[i - 1].id }) } },
                     { label: 'Mover para a direita', onClick: () => { const i = boards.indexOf(b); if (i < boards.length - 1) call('boards.reorder', { id: b.id, beforeId: boards[i + 1].id, afterId: boards[i + 2]?.id ?? null }) } },

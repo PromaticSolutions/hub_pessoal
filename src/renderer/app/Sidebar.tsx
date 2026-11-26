@@ -1,12 +1,12 @@
-import { NavLink } from 'react-router-dom'
 import { Building2, CalendarDays, CalendarRange, LayoutDashboard, Paperclip, Search, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cx } from '../lib/format'
 import { SpaceTree } from './SpaceTree'
+import { AppNavLink } from './tabs-context'
 
 function Item({ to, icon, label, testId }: { to: string; icon: ReactNode; label: string; testId: string }) {
   return (
-    <NavLink
+    <AppNavLink
       to={to}
       end={to === '/'}
       data-testid={testId}
@@ -19,7 +19,7 @@ function Item({ to, icon, label, testId }: { to: string; icon: ReactNode; label:
     >
       {icon}
       {label}
-    </NavLink>
+    </AppNavLink>
   )
 }
 
