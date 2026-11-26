@@ -79,7 +79,7 @@ for (const fn of functions) {
   }
   writeFileSync(
     join(dir, '.vc-config.json'),
-    JSON.stringify({ runtime: 'nodejs22.x', handler: 'index.mjs', launcherType: 'Nodejs', shouldAddHelpers: false }, null, 2) + '\n'
+    JSON.stringify({ runtime: 'nodejs22.x', handler: 'index.mjs', launcherType: 'Nodejs', shouldAddHelpers: false, regions: ['gru1'] }, null, 2) + '\n'
   )
   console.log(`[build] ${rel(join(dir, 'index.mjs'))} (${(code.length / 1024).toFixed(0)} KB)`)
 }
