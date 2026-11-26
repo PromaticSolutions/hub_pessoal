@@ -1,210 +1,196 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import type { Priority, TaskListItem } from '@shared/types'
-import { PRIORITIES, PRIORITY_LABELS } from '@shared/constants'
-import { Dot, EmptyState, PageHeader, PriorityBadge, Select } from '../../components/ui'
-import { useApiQuery } from '../../lib/queries'
-import { cx, formatShort } from '../../lib/format'
-import { useOpenTask } from '../board/BoardView'
-import { allProjects } from '../week/TaskFilters'
+import ReactGridLayout, { useContainerWidth, verticalCompactor, type Layout } from 'react-grid-layout'
+import 'react-grid-layout/css/styles.css'
+import { Check, LayoutGrid, MoreHorizontal, Pencil, Plus } from 'lucide-react'
+import type { TemplateKey } from '@shared/widgets'
+import { Button, Field, Input, Menu, Modal, PageHeader, Select, useConfirm, usePrompt } from '../../components/ui'
+import { useApiQuery, useCall } from '../../lib/queries'
 import { api } from '../../lib/api'
+import { useToast } from '../../components/toast'
+import { WidgetFrame, type WidgetRecord } from './widgets'
+import { useScopeOptions, WidgetEditor, scopeToValue, valueToScope, type EditorResult } from './WidgetEditor'
 
-/* Validated with dataviz validate_palette.js (light #fff / dark #09090b). */
-const SERIES = { light: { created: '#4F46E5', completed: '#D97706' }, dark: { created: '#818CF8', completed: '#D97706' } }
-/* Priority is ordinal → one-hue sequential ramp, low = lightest (light mode) / dimmest (dark mode). */
-const PRIO_RAMP: Record<'light' | 'dark', Record<Priority, string>> = {
-  light: { low: '#C7D2FE', medium: '#818CF8', high: '#4F46E5', urgent: '#312E81' },
-  dark: { low: '#3730A3', medium: '#4F46E5', high: '#818CF8', urgent: '#C7D2FE' }
-}
-
-function useIsDark() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
-  useEffect(() => {
-    const obs = new MutationObserver(() => setDark(document.documentElement.classList.contains('dark')))
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-    return () => obs.disconnect()
-  }, [])
-  return dark
-}
-
-type ScopeValue = string // 'all' | 'personal' | 'professional' | 'c:<id>' | 'p:<id>'
-const toScope = (v: ScopeValue) =>
-  v.startsWith('c:') ? { companyId: Number(v.slice(2)) } : v.startsWith('p:') ? { projectId: Number(v.slice(2)) } : (v as 'all' | 'personal' | 'professional')
-
-function Kpi({ id, label, value, tone }: { id: string; label: string; value: number; tone?: 'danger' | 'warn' }) {
+function NewDashboardDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
+  const [name, setName] = useState('')
+  const [template, setTemplate] = useState<TemplateKey | 'empty'>('empty')
+  const call = useCall()
   return (
-    <div className="surface lift p-4">
-      <div data-testid={`kpi-${id}`} className={cx('text-3xl font-semibold tabular-nums', tone === 'danger' && value > 0 && 'text-red-600', tone === 'warn' && value > 0 && 'text-amber-600')}>
-        {value}
-      </div>
-      <div className="mt-1 text-xs font-medium text-zinc-500">{label}</div>
-    </div>
-  )
-}
-
-function TaskMiniList({ title, items, empty, testId }: { title: string; items: TaskListItem[]; empty: string; testId: string }) {
-  const open = useOpenTask()
-  return (
-    <div className="surface lift p-4" data-testid={testId}>
-      <h3 className="mb-2 text-sm font-semibold tracking-tight">{title}</h3>
-      {!items.length ? (
-        <div className="text-xs text-zinc-500">{empty}</div>
-      ) : (
-        <ul className="space-y-1">
-          {items.map((t) => (
-            <li key={t.id}>
-              <button className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/50" onClick={() => open(t.id)}>
-                <Dot color={t.companyColor} size={8} />
-                <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                <span className="truncate text-xs text-zinc-500">{t.projectName}</span>
-                <PriorityBadge priority={t.priority} />
-                <span className={cx('w-16 text-right text-xs', t.isOverdue ? 'font-semibold text-red-600' : 'text-zinc-500')}>{formatShort(t.dueAt)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="surface lift p-4">
-      <h3 className="mb-3 text-sm font-semibold tracking-tight">{title}</h3>
-      {children}
-    </div>
+    <Modal open onClose={onClose} title="Novo dashboard" testId="new-dashboard">
+      <form
+        className="space-y-3"
+        onSubmit={async (e) => {
+          e.preventDefault()
+          if (!name.trim()) return
+          const d = await call('dashboards.create', { name, template })
+          onCreated(d.id)
+          onClose()
+        }}
+      >
+        <Field label="Nome"><Input data-testid="new-dashboard-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Financeiro" /></Field>
+        <Field label="Começar a partir de">
+          <Select data-testid="new-dashboard-template" className="w-full" value={template} onChange={(e) => setTemplate(e.target.value as TemplateKey | 'empty')}>
+            <option value="empty">Dashboard vazio</option>
+            <option value="geral">Modelo Geral</option>
+            <option value="profissional">Modelo Profissional</option>
+            <option value="pessoal">Modelo Pessoal</option>
+            <option value="financeiro">Modelo Financeiro (compras)</option>
+          </Select>
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button onClick={onClose}>Cancelar</Button>
+          <Button type="submit" variant="primary" data-testid="new-dashboard-ok" disabled={!name.trim()}>Criar</Button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
 export default function DashboardPage() {
   const [params] = useSearchParams()
-  const [scope, setScope] = useState<ScopeValue>(() => (params.get('space') ? `c:${params.get('space')}` : 'all'))
-  const [loaded, setLoaded] = useState(!!params.get('space'))
-  useEffect(() => {
-    if (loaded) return
-    api('settings.get', { key: 'dashboard.scope' }).then((v) => { if (typeof v === 'string') setScope(v) }).finally(() => setLoaded(true))
-  }, [loaded])
-  const changeScope = (v: ScopeValue) => {
-    setScope(v)
-    api('settings.set', { key: 'dashboard.scope', value: v }).catch(() => {})
+  const spaceParam = params.get('space')
+  const { data: dashboards } = useApiQuery('dashboards.list', {})
+  const { data: activeSetting } = useApiQuery('settings.get', { key: 'dashboard.active' })
+  const [activeLocal, setActiveLocal] = useState<number | null>(null)
+  const activeId = activeLocal ?? (typeof activeSetting === 'number' && dashboards?.some((d) => d.id === activeSetting) ? activeSetting : dashboards?.[0]?.id ?? null)
+  const { data: full } = useApiQuery('dashboards.get', { id: activeId ?? 0 }, { enabled: activeId != null })
+  const [editing, setEditing] = useState(false)
+  const [editor, setEditor] = useState<{ widget: WidgetRecord | null } | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [overrides, setOverrides] = useState<Record<string, { x: number; y: number; w: number; h: number }>>({})
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const call = useCall()
+  const confirm = useConfirm()
+  const prompt = usePrompt()
+  const toast = useToast()
+  const { width, containerRef, mounted } = useContainerWidth()
+  const scopeOptions = useScopeOptions()
+
+  const widgets = useMemo(() => full?.widgets ?? [], [full])
+  // Server positions, overridden by what the user moved in this session (never drops a widget).
+  const layout: Layout = useMemo(
+    () => widgets.map((w) => ({ i: String(w.id), ...(overrides[String(w.id)] ?? { x: w.x, y: w.y, w: w.w, h: w.h }), minW: 2, minH: 2 })),
+    [widgets, overrides]
+  )
+  useEffect(() => setOverrides({}), [activeId])
+
+  const scope = spaceParam ? valueToScope(`c:${spaceParam}`) : full?.dashboard.scope ?? 'all'
+  const choose = (id: number) => {
+    setActiveLocal(id)
+    setEditing(false)
+    api('settings.set', { key: 'dashboard.active', value: id }).catch(() => {})
   }
-  const { data } = useApiQuery('dashboard.get', { scope: toScope(scope) }, { enabled: loaded })
-  const { data: tree } = useApiQuery('spaces.tree', {})
-  const dark = useIsDark()
-  const mode = dark ? 'dark' : 'light'
-  const axis = dark ? '#a1a1aa' : '#71717a'
-  const grid = dark ? '#27272a' : '#e4e4e7'
-  const surface = dark ? '#09090b' : '#ffffff'
-  const tooltipStyle = { background: surface, border: `1px solid ${grid}`, borderRadius: 6, fontSize: 12, color: dark ? '#e4e4e7' : '#18181b' }
+  const onLayoutChange = (l: Layout) => {
+    if (!editing || !activeId) return
+    setOverrides((o) => {
+      const next = { ...o }
+      for (const it of l) next[it.i] = { x: it.x, y: it.y, w: it.w, h: it.h }
+      return next
+    })
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      const ids = new Set(widgets.map((w) => String(w.id)))
+      api('dashboards.saveLayout', { dashboardId: activeId, items: l.filter((it) => ids.has(it.i)).map((it) => ({ id: Number(it.i), x: it.x, y: it.y, w: it.w, h: it.h })) }).catch((e) => toast.error(e.message))
+    }, 400)
+  }
+  const saveEditor = async (r: EditorResult) => {
+    if (!activeId || !editor) return
+    if (editor.widget) {
+      await call('dashboards.updateWidget', { id: editor.widget.id, type: r.type, title: r.title, config: r.config as never, w: r.w, h: r.h })
+      if (r.w || r.h) setOverrides((o) => { const n = { ...o }; delete n[String(editor.widget!.id)]; return n })
+    }
+    else {
+      const w = await call('dashboards.addWidget', { dashboardId: activeId, type: r.type, title: r.title, config: r.config as never })
+      if (r.w || r.h) await call('dashboards.updateWidget', { id: w.id, w: r.w, h: r.h })
+    }
+    setEditor(null)
+  }
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
-  const weekLabel = (iso: string) => format(parseISO(iso), 'dd/MM', { locale: ptBR })
 
   return (
     <div className="flex-1 overflow-y-auto">
       <PageHeader title="Dashboard">
-        <Select data-testid="dashboard-scope" value={scope} onChange={(e) => changeScope(e.target.value)}>
-          <option value="all">Tudo</option>
-          <option value="personal">Pessoal</option>
-          <option value="professional">Profissional</option>
-          <optgroup label="Espaço">
-            {tree?.map((s) => <option key={s.company.id} value={`c:${s.company.id}`}>{s.company.name}</option>)}
-          </optgroup>
-          <optgroup label="Projeto">
-            {allProjects(tree).map((p) => <option key={p.id} value={`p:${p.id}`}>{p.name}</option>)}
-          </optgroup>
+        <Select data-testid="dashboard-select" value={activeId ?? ''} onChange={(e) => choose(Number(e.target.value))} aria-label="Dashboard">
+          {dashboards?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </Select>
-      </PageHeader>
-      <div className="space-y-4 px-6 pb-6 pt-0">
-        <div className="text-sm text-zinc-500">
-          {greeting} — {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
-        </div>
-        {!data ? null : data.kpis.total === 0 ? (
-          <EmptyState text="Nenhuma tarefa ainda. Crie um projeto no menu lateral (Espaços → +) e adicione cartões no quadro." />
-        ) : (
+        <Select
+          data-testid="dashboard-scope"
+          aria-label="Escopo"
+          value={scopeToValue(scope)}
+          onChange={async (e) => { if (activeId) await call('dashboards.setScope', { id: activeId, scope: valueToScope(e.target.value) as never }) }}
+        >
+          {scopeOptions}
+        </Select>
+        {editing ? (
           <>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <Kpi id="total" label="Total de tarefas" value={data.kpis.total} />
-              <Kpi id="todo" label="Pendentes" value={data.kpis.todo} />
-              <Kpi id="inProgress" label="Em andamento" value={data.kpis.inProgress} />
-              <Kpi id="done" label="Concluídas" value={data.kpis.done} />
-              <Kpi id="overdue" label="Atrasadas" value={data.kpis.overdue} tone="danger" />
-              <Kpi id="nearDue" label="Vencendo em breve" value={data.kpis.nearDue} tone="warn" />
-              <Kpi id="activeProjects" label="Projetos ativos" value={data.kpis.activeProjects} />
-              <Kpi id="companies" label="Empresas cadastradas" value={data.kpis.companies} />
-            </div>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              <TaskMiniList testId="list-overdue" title="Atrasadas" items={data.overdueList} empty="Nada atrasado. 🎉" />
-              <TaskMiniList testId="list-neardue" title="Próximos vencimentos" items={data.nearDueList} empty="Nada vencendo nos próximos dias." />
-            </div>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              <ChartCard title="Carga de trabalho por espaço (tarefas abertas)">
-                <ResponsiveContainer width="100%" height={Math.max(160, data.byCompany.length * 44 + 60)}>
-                  <BarChart data={data.byCompany} layout="vertical" margin={{ left: 8, right: 16 }}>
-                    <CartesianGrid horizontal={false} stroke={grid} />
-                    <XAxis type="number" allowDecimals={false} stroke={axis} fontSize={12} />
-                    <YAxis type="category" dataKey="name" width={110} stroke={axis} fontSize={12} />
-                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: grid, opacity: 0.4 }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    {[...PRIORITIES].reverse().map((p, i, arr) => (
-                      <Bar key={p} dataKey={p} name={PRIORITY_LABELS[p]} stackId="a" fill={PRIO_RAMP[mode][p]} stroke={surface} strokeWidth={2} radius={i === arr.length - 1 ? [0, 4, 4, 0] : 0} barSize={20} />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-              <ChartCard title="Tarefas abertas por prioridade">
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={data.byPriority.map((d) => ({ ...d, label: PRIORITY_LABELS[d.priority] }))} margin={{ right: 16 }}>
-                    <CartesianGrid vertical={false} stroke={grid} />
-                    <XAxis dataKey="label" stroke={axis} fontSize={12} />
-                    <YAxis allowDecimals={false} stroke={axis} fontSize={12} />
-                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: grid, opacity: 0.4 }} formatter={(v) => [v, 'Tarefas']} />
-                    <Bar dataKey="count" name="Tarefas" fill={SERIES[mode].created} radius={[4, 4, 0, 0]} barSize={36} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-              <ChartCard title="Produtividade — criadas × concluídas por semana">
-                <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={data.createdVsCompleted.map((w) => ({ ...w, label: weekLabel(w.weekStart) }))} margin={{ right: 16 }}>
-                    <CartesianGrid vertical={false} stroke={grid} />
-                    <XAxis dataKey="label" stroke={axis} fontSize={12} />
-                    <YAxis allowDecimals={false} stroke={axis} fontSize={12} />
-                    <Tooltip contentStyle={tooltipStyle} labelFormatter={(l) => `Semana de ${l}`} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line type="monotone" dataKey="created" name="Criadas" stroke={SERIES[mode].created} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 5 }} />
-                    <Line type="monotone" dataKey="completed" name="Concluídas" stroke={SERIES[mode].completed} strokeWidth={2} strokeDasharray="5 3" dot={{ r: 4 }} activeDot={{ r: 5 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartCard>
-              <ChartCard title="Resumo por espaço">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-zinc-500">
-                      <th className="pb-1 font-medium">Espaço</th>
-                      {PRIORITIES.map((p) => <th key={p} className="pb-1 text-right font-medium">{PRIORITY_LABELS[p]}</th>)}
-                      <th className="pb-1 text-right font-medium">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.byCompany.map((c) => (
-                      <tr key={c.companyId} className="border-t border-zinc-100 dark:border-zinc-800">
-                        <td className="py-1"><span className="flex items-center gap-2"><Dot color={c.color} size={8} />{c.name}</span></td>
-                        {PRIORITIES.map((p) => <td key={p} className="py-1 text-right tabular-nums">{c[p]}</td>)}
-                        <td className="py-1 text-right font-medium tabular-nums">{c.low + c.medium + c.high + c.urgent}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </ChartCard>
-            </div>
+            <Button data-testid="widget-add" onClick={() => setEditor({ widget: null })}><Plus size={14} /> Adicionar bloco</Button>
+            <Button variant="primary" data-testid="dashboard-edit-done" onClick={() => setEditing(false)}><Check size={14} /> Concluir</Button>
           </>
+        ) : (
+          <Button data-testid="dashboard-edit" onClick={() => setEditing(true)}><Pencil size={14} /> Editar layout</Button>
         )}
+        <Menu
+          trigger={<Button variant="ghost" aria-label="Mais opções" data-testid="dashboard-menu"><MoreHorizontal size={16} /></Button>}
+          items={[
+            { label: 'Novo dashboard…', testId: 'dashboard-new', icon: <LayoutGrid size={14} />, onClick: () => setCreating(true) },
+            { label: 'Duplicar este', onClick: async () => { if (!full) return; const d = await call('dashboards.create', { name: `${full.dashboard.name} (cópia)`, duplicateOf: full.dashboard.id }); choose(d.id) } },
+            { label: 'Renomear…', onClick: async () => { if (!full) return; const n = await prompt({ title: 'Renomear dashboard', initial: full.dashboard.name }); if (n) await call('dashboards.rename', { id: full.dashboard.id, name: n }) } },
+            'separator',
+            {
+              label: 'Excluir dashboard',
+              danger: true,
+              onClick: async () => {
+                if (!full) return
+                if (await confirm({ title: `Excluir o dashboard "${full.dashboard.name}"?`, description: 'Os blocos deste dashboard serão removidos. Nenhuma tarefa é afetada.', danger: true, confirmLabel: 'Excluir' })) {
+                  await call('dashboards.delete', { id: full.dashboard.id })
+                  setActiveLocal(null)
+                }
+              }
+            }
+          ]}
+        />
+      </PageHeader>
+      <div className="px-6 pb-6">
+        <div className="mb-2 text-sm text-zinc-500">{greeting} — {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}{editing && ' · arraste pelos ⋮⋮ e redimensione pelo canto inferior direito'}</div>
+        <div ref={containerRef} className="-mx-[7px]">
+          {mounted && full && (
+            widgets.length ? (
+              <ReactGridLayout
+                width={width}
+                layout={layout}
+                gridConfig={{ cols: 12, rowHeight: 40, margin: [14, 14], containerPadding: [7, 7] }}
+                dragConfig={{ enabled: editing, handle: '.widget-drag' }}
+                resizeConfig={{ enabled: editing, handles: ['se'] }}
+                compactor={verticalCompactor}
+                onLayoutChange={onLayoutChange}
+              >
+                {widgets.map((w) => (
+                  <div key={String(w.id)}>
+                    <WidgetFrame
+                      w={w}
+                      scope={scope}
+                      editing={editing}
+                      onEdit={() => setEditor({ widget: w })}
+                      onRemove={async () => { if (await confirm({ title: `Remover o bloco "${w.title}"?`, confirmLabel: 'Remover', danger: true })) await call('dashboards.removeWidget', { id: w.id }) }}
+                    />
+                  </div>
+                ))}
+              </ReactGridLayout>
+            ) : (
+              <div className="mx-[7px] flex flex-col items-center gap-3 rounded-md border border-dashed border-[var(--line-strong)] p-10 text-sm text-zinc-500">
+                Este dashboard está vazio.
+                <Button variant="primary" onClick={() => { setEditing(true); setEditor({ widget: null }) }}><Plus size={14} /> Adicionar bloco</Button>
+              </div>
+            )
+          )}
+        </div>
       </div>
+      {editor && <WidgetEditor key={editor.widget?.id ?? 'new'} initial={editor.widget} onSave={saveEditor} onClose={() => setEditor(null)} />}
+      {creating && <NewDashboardDialog onClose={() => setCreating(false)} onCreated={(id) => choose(id)} />}
     </div>
   )
 }

@@ -119,3 +119,13 @@ body {
   .lift, .card { transition: none; }
   .lift:hover, .card:hover { transform: none; }
 }
+
+/* react-grid-layout: placeholder and resize handle in the app's style */
+.react-grid-item.react-grid-placeholder {
+  background: rgb(99 102 241 / 0.25) !important;
+  border-radius: 6px;
+  opacity: 1 !important;
+}
+.react-grid-item > .react-resizable-handle::after {
+  border-color: rgb(99 102 241 / 0.7) !important;
+}
